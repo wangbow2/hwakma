@@ -1,9 +1,9 @@
 {
   "name": "확~마! 제자반",
   "short_name": "확마",
-  "id": "./?app=hwakma-v2",
+  "id": "./?app=hwakma-v3",
   "description": "확~마! 제자반 — 큐티 · D형 큐티 · 기도 영적일지 · 주일 설교 노트",
-  "start_url": "./",
+  "start_url": "./?app=hwakma-v3",
   "scope": "./",
   "display": "standalone",
   "background_color": "#000000",
