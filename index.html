@@ -95,8 +95,12 @@
 
 <main class="pt-14 pb-20 max-w-2xl mx-auto" id="main-content">
   <div id="page-home" class="page active p-4 space-y-4"></div>
-  <div id="page-qt" class="page p-4 space-y-4"></div>
-  <div id="page-dqt" class="page p-4 space-y-4"></div>
+  <!-- 매일 큐티와 주 1회 D형 큐티는 한 화면 안에서 탭으로 오간다 -->
+  <div id="page-qt" class="page p-4 space-y-4">
+    <div id="qt-tabs"></div>
+    <div id="qt-daily" class="space-y-4"></div>
+    <div id="page-dqt" class="space-y-4"></div>
+  </div>
   <div id="page-pray" class="page p-4 space-y-4"></div>
   <div id="page-sermon" class="page p-4 space-y-4"></div>
   <div id="page-bday" class="page p-4 space-y-4"></div>
@@ -105,33 +109,25 @@
 
 <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 shadow-lg">
   <div class="flex justify-around items-center max-w-2xl mx-auto py-1">
-    <button class="nav-btn active flex flex-col items-center py-1 px-1" onclick="navigate('home')" id="nav-home">
-      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-      <span class="text-[11px] mt-0.5 font-medium text-gray-500">홈</span>
+    <button class="nav-btn active flex flex-col items-center py-1 px-2" onclick="navigate('home')" id="nav-home">
+      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+      <span class="text-xs mt-0.5 font-medium text-gray-500">홈</span>
     </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('qt')" id="nav-qt">
-      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-      <span class="text-[11px] mt-0.5 font-medium text-gray-500">큐티</span>
+    <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('qt')" id="nav-qt">
+      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span class="text-xs mt-0.5 font-medium text-gray-500">큐티</span>
     </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('dqt')" id="nav-dqt">
-      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-      <span class="text-[11px] mt-0.5 font-medium text-gray-500">D형</span>
+    <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('pray')" id="nav-pray">
+      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <span class="text-xs mt-0.5 font-medium text-gray-500">기도</span>
     </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('pray')" id="nav-pray">
-      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      <span class="text-[11px] mt-0.5 font-medium text-gray-500">기도</span>
+    <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('sermon')" id="nav-sermon">
+      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 18V6a2 2 0 0 1 2-2h6v16H5a2 2 0 0 1-2-2z"/><path d="M21 18V6a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 0 2-2z"/></svg>
+      <span class="text-xs mt-0.5 font-medium text-gray-500">설교노트</span>
     </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('sermon')" id="nav-sermon">
-      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 18V6a2 2 0 0 1 2-2h6v16H5a2 2 0 0 1-2-2z"/><path d="M21 18V6a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 0 2-2z"/></svg>
-      <span class="text-[11px] mt-0.5 font-medium text-gray-500">설교</span>
-    </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('bday')" id="nav-bday">
-      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 21h16v-7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3z"/><path d="M4 15c1.5 1 2.5 1 4 0s2.5-1 4 0 2.5 1 4 0 2.5-1 4 0"/><path d="M12 8V5"/><path d="M12 5c0-1 1-2 1-2"/></svg>
-      <span class="text-[11px] mt-0.5 font-medium text-gray-500">생일</span>
-    </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('check')" id="nav-check">
-      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      <span class="text-[11px] mt-0.5 font-medium text-gray-500">체크표</span>
+    <button class="nav-btn flex flex-col items-center py-1 px-2 hidden" onclick="navigate('check')" id="nav-check">
+      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="text-xs mt-0.5 font-medium text-gray-500">체크표</span>
     </button>
   </div>
 </nav>
@@ -235,7 +231,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.4';
+const APP_BUILD = '2026-09-05.5';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -260,7 +256,7 @@ const LEADERS = [
 ];
 const MANAGER = 't1';   // 남의 글을 고치고 지울 수 있는 단 한 사람
 
-// 큐티 본문 — 성서유니온 「청소년 매일성경」 진도표
+// 큐티 본문 — 성서유니온 「청소년 매일성경」 날짜별 본문
 const QT_SCHEDULE = {
   // 8월 — 준비 주간(과정 시작 전 한 주)
   '2026-08-31':'이사야 39:1-8',
@@ -446,8 +442,10 @@ let state = {
 };
 let currentUser = null;   // 로컬 전용 — 서버에 올리지 않는다
 let currentPage = 'home';
+let qtSection = 'daily';  // 아래 메뉴의 큐티 안에서 매일 큐티 / D형 큐티를 전환한다
 let checkWeek = 0;
 let qtDate = '', prayDate = '', sermonDate = '';
+let sermonType = 'sun';  // 금요철야 / 주일 설교 노트를 따로 제출한다
 let dqtWeek = 0;   // D형은 주 1회라 날짜가 아니라 주차를 고른다
 let qtCalMonth = null;
 let openPerson = { qt:null, dqt:null, pray:null, sermon:null };
@@ -578,14 +576,22 @@ function dayLabel(ds) {
 function daysAgo(ds) { return Math.round((today0() - parseDate(ds)) / 86400000); }
 function canWrite(ds) { if (canManage()) return true; const g = daysAgo(ds); return g === 0 || g === 1; }
 function isLate(ds) { return daysAgo(ds) === 1; }
-// 설교 노트는 주일에 듣고 그 주 안에 정리한다 — 주일부터 그 주 토요일까지 연다.
-function canWriteSermon(ds) { if (canManage()) return true; const g = daysAgo(ds); return g >= 0 && g <= 6; }
+// 설교 노트는 예배일부터 그 주 토요일까지 연다.
+function canWriteSermon(ds) {
+  if (canManage()) return true;
+  const s = slotOf(ds);
+  return !!s && parseDate(ds) <= today0() && today0() <= weekInfo(s.n).sat;
+}
 
 // ==========================================
 // 집계
 // ==========================================
 function attOf(id, n) { return state.att[weekKey(id,n)] || ''; }
-function sermonOf(id, n) { return (state.sermon || {})[weekKey(id,n)] || ''; }
+function sermonKey(id, n, type) { return `${weekKey(id,n)}_${type === 'fri' ? 'fri' : 'sun'}`; }
+function sermonOf(id, n, type = 'sun') {
+  const all = state.sermon || {};
+  return all[sermonKey(id,n,type)] || (type === 'sun' ? all[weekKey(id,n)] : '') || '';
+}
 function arrOf(field, id, n) {
   const v = (state[field] || {})[weekKey(id,n)];
   return Array.isArray(v) && v.length === 7 ? v : [false,false,false,false,false,false,false];
@@ -605,7 +611,7 @@ function weekSummary(id, n) {
 }
 // 제자반 전체 기간 합계
 function totalOf(id) {
-  const t = { 출석:0, 지각:0, 무단지각:0, 결석:0, 무단결석:0, qt:0, dqt:0, pray:0, sermon:0, 주차:0 };
+  const t = { 출석:0, 지각:0, 무단지각:0, 결석:0, 무단결석:0, qt:0, dqt:0, pray:0, sermon:0, sermonFri:0, sermonSun:0, 주차:0 };
   for (let n = 0; n < WEEKS; n++) {
     if (!weekStarted(n)) continue;
     t.주차++;
@@ -613,7 +619,8 @@ function totalOf(id) {
     t.qt += cntOf('qt',id,n);
     if (dqtDone(id,n)) t.dqt++;
     t.pray += cntOf('pray',id,n);
-    if (sermonOf(id,n) === 'O') t.sermon++;
+    if (sermonOf(id,n,'fri') === 'O') { t.sermon++; t.sermonFri++; }
+    if (sermonOf(id,n,'sun') === 'O') { t.sermon++; t.sermonSun++; }
   }
   return t;
 }
@@ -625,6 +632,9 @@ function allUsers() { return state.students.concat(LEADERS); }
 function findUser(id) { return allUsers().find(u => u.id === id) || null; }
 function isLeader() { return LEADERS.some(l => l.id === currentUser); }
 function canManage() { return currentUser === MANAGER; }
+// 체크표는 목사님과 반장만 본다. 고치는 것은 목사님만.
+function isMonitor() { const u = findUser(currentUser); return !!(u && u.role === '반장'); }
+function canSeeCheck() { return isLeader() || isMonitor(); }
 
 function fillLoginSelect() {
   const sel = document.getElementById('login-name-select');
@@ -694,6 +704,7 @@ function resetDates() {
   // 설교 노트는 이번 주 주일 자로 연다.
   const s = slotOf(t);
   sermonDate = dateOf(s ? s.n : cw, 0);
+  sermonType = 'sun';
   qtCalMonth = qtDate.slice(0, 7);
 }
 
@@ -747,7 +758,11 @@ function markCheck(kind, id, date, on) {
   if (kind !== 'sermon' && kind !== 'dqt' && !f) return;
   const s = slotOf(date);
   if (!s) return;
-  if (kind === 'sermon') { pushPatch({ sermon: { [weekKey(id, s.n)]: on ? 'O' : '' } }); return; }
+  if (kind === 'sermon') {
+    const type = s.i === 5 ? 'fri' : 'sun';
+    pushPatch({ sermon: { [sermonKey(id, s.n, type)]: on ? 'O' : '' } });
+    return;
+  }
   // D형은 주 1회 — 그 주 칸에 낸 날짜를 적는다.
   if (kind === 'dqt') { pushPatch({ dqt: { [weekKey(id, s.n)]: on ? date : '' } }); return; }
   const arr = arrOf(f, id, s.n).slice();
@@ -1002,11 +1017,11 @@ function cycleAtt(id, n) {
   pushPatch({ att: { [weekKey(id,n)]: next } });
   renderAll();
 }
-function cycleSermon(id, n) {
+function cycleSermon(id, n, type = 'sun') {
   if (!isLeader()) return;
-  const cur = sermonOf(id, n);
+  const cur = sermonOf(id, n, type);
   const next = cur === '' ? 'O' : (cur === 'O' ? 'X' : '');
-  pushPatch({ sermon: { [weekKey(id,n)]: next } });
+  pushPatch({ sermon: { [sermonKey(id,n,type)]: next } });
   renderAll();
 }
 // D형은 주 1회라 한 칸으로 켜고 끈다.
@@ -1027,6 +1042,8 @@ function toggleDot(field, id, n, i) {
 // 렌더링
 // ==========================================
 function navigate(page) {
+  if (page === 'dqt') { page = 'qt'; qtSection = 'dqt'; }
+  else if (page === 'qt') qtSection = 'daily';
   currentPage = page;
   _editingDoc = null; _delArm = null; _pendingImg = null;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1045,6 +1062,7 @@ function renderAll() {
   document.getElementById('user-menu-name').textContent = u ? u.name : '';
   document.getElementById('user-menu-role').textContent = isLeader() ? (u ? u.title : '인도자') : (u && u.role ? u.role : '제자반');
   document.getElementById('btn-settings').classList.toggle('hidden', !isLeader());
+  document.getElementById('nav-check').classList.toggle('hidden', !canSeeCheck());
   document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
   ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
      sermon: renderSermon, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
@@ -1068,7 +1086,8 @@ function renderHome() {
   const myQt   = inRange ? qtOf(me,n)[i]   : false;
   const myDqt  = inRange ? dqtDone(me,n)   : false;
   const myPray = inRange ? prayOf(me,n)[i] : false;
-  const mySermon = sermonOf(me, n) === 'O';
+  const myFriSermon = sermonOf(me, n, 'fri') === 'O';
+  const mySunSermon = sermonOf(me, n, 'sun') === 'O';
 
   const todo = `
     <div class="card">
@@ -1079,49 +1098,37 @@ function renderHome() {
       ${!inRange ? `<p class="text-sm text-gray-500 py-4 text-center">오늘은 제자반 기간이 아니에요</p>` : `
       <div class="space-y-2">
         <button onclick="navigate('qt')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myQt?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">📖 큐티<span class="text-[11px] font-normal text-gray-400">${esc(todayRef())}</span></span>
+          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">큐티<span class="text-[11px] font-normal text-gray-400">${esc(todayRef())}</span></span>
           ${doneChip(myQt, myQt?'했어요':'아직')}
         </button>
         <button onclick="navigate('dqt')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myDqt?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">✍️ D형 큐티<span class="text-[11px] font-normal text-gray-400">이번 주 한 번 · 손으로 써서 사진</span></span>
+          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">D형 큐티<span class="text-[11px] font-normal text-gray-400">이번 주 한 번 · 손으로 써서 사진</span></span>
           ${doneChip(myDqt, myDqt?'냈어요':'아직')}
         </button>
         <button onclick="navigate('pray')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myPray?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">🕯️ 기도 영적일지<span class="text-[11px] font-normal text-gray-400">하루 10~15분</span></span>
+          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">기도 영적일지<span class="text-[11px] font-normal text-gray-400">하루 10~15분</span></span>
           ${doneChip(myPray, myPray?'했어요':'아직')}
         </button>
-        ${i >= 1 ? `
-        <button onclick="navigate('sermon')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${mySermon?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">📝 주일 설교 노트<span class="text-[11px] font-normal text-gray-400">${fmt(weekInfo(n).sun)} 주일</span></span>
-          ${doneChip(mySermon, mySermon?'냈어요':'아직')}
-        </button>` : ''}
+        <button onclick="navigate('sermon');setSermonType('fri')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myFriSermon?'bg-green-50 border-green-200':'bg-white'}">
+          <span class="text-sm font-semibold text-gray-800">금요철야 노트 <span class="text-[11px] font-normal text-gray-400">${fmt(addDays(weekInfo(n).sun,5))}</span></span>
+          ${doneChip(myFriSermon, myFriSermon?'냈어요':'아직')}
+        </button>
+        <button onclick="navigate('sermon');setSermonType('sun')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${mySunSermon?'bg-green-50 border-green-200':'bg-white'}">
+          <span class="text-sm font-semibold text-gray-800">주일 설교 노트 <span class="text-[11px] font-normal text-gray-400">${fmt(weekInfo(n).sun)}</span></span>
+          ${doneChip(mySunSermon, mySunSermon?'냈어요':'아직')}
+        </button>
       </div>`}
     </div>`;
 
-  const sum = weekSummary(me, n);
-  const mine = `
-    <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-2">이번 주 내 기록 <span class="text-[11px] font-normal text-gray-400">${n+1}주차</span></h3>
-      <div class="grid grid-cols-4 gap-2 text-center">
-        <div class="rounded-xl bg-gray-50 py-2">
-          <p class="text-[11px] text-gray-500">토 모임</p>
-          <p class="text-sm font-bold ${sum.att?'text-gray-800':'text-gray-300'} mt-0.5">${sum.att || '·'}</p>
-        </div>
-        <div class="rounded-xl bg-gray-50 py-2">
-          <p class="text-[11px] text-gray-500">큐티</p>
-          <p class="text-sm font-bold text-blue-600 mt-0.5">${sum.qt}<span class="text-gray-400 text-xs">/7</span></p>
-        </div>
-        <div class="rounded-xl bg-gray-50 py-2">
-          <p class="text-[11px] text-gray-500">D형</p>
-          <p class="text-sm font-bold ${sum.dqt?'text-purple-600':'text-gray-300'} mt-0.5">${sum.dqt?'✓':'·'}<span class="text-gray-400 text-xs">/주1</span></p>
-        </div>
-        <div class="rounded-xl bg-gray-50 py-2">
-          <p class="text-[11px] text-gray-500">기도일지</p>
-          <p class="text-sm font-bold text-green-600 mt-0.5">${sum.pray}<span class="text-gray-400 text-xs">/7</span></p>
-        </div>
+  const mine = !isLeader() ? `
+    <div>
+      <div class="flex items-center justify-between mb-2 px-1">
+        <h3 class="font-bold text-gray-800 text-sm">이번 주 내 체크표</h3>
+        <span class="text-[11px] text-gray-400">${n+1}주차</span>
       </div>
-      <p class="text-[11px] text-gray-400 mt-2">냈는지 안 냈는지는 자동으로 켜집니다 — 큐티·D형·기도일지를 올리면 그날 칸이 채워져요.</p>
-    </div>`;
+      ${checkCard(findUser(me), n, true)}
+      <p class="text-[11px] text-gray-400 mt-2 px-1">제출하면 해당 칸이 자동으로 채워집니다.</p>
+    </div>` : '';
 
   const leaderBoard = isLeader() && inRange ? `
     <div class="card">
@@ -1148,16 +1155,27 @@ function renderHome() {
   const bdToday = todaysBirthdays();
   const bdSoon = upcomingBirthdays().filter(x => x.days > 0)[0];
   const bdayHome = bdToday.length ? `
-    <div class="card bg-gray-900 cursor-pointer" onclick="navigate('bday')">
-      <p class="text-2xl text-center">🎉</p>
+    <div class="card bg-gray-900">
       <p class="text-white font-bold text-center mt-1">오늘은 ${bdToday.map(x=>x.name).join(' · ')} 생일!</p>
-      <p class="text-white/60 text-xs text-center mt-1">눌러서 축하 한마디 남기기</p>
+      <p class="text-white/60 text-xs text-center mt-1">함께 축하해 주세요.</p>
     </div>`
     : (bdSoon ? `
-    <button onclick="navigate('bday')" class="card w-full flex items-center justify-between">
-      <span class="flex items-center gap-2 text-sm text-gray-700">🎂 다음 생일<b class="text-gray-900">${bdSoon.name}</b><span class="text-xs text-gray-400">${birthLabel(bdSoon.id)}</span></span>
+    <div class="card w-full flex items-center justify-between">
+      <span class="flex items-center gap-2 text-sm text-gray-700">다음 생일 <b class="text-gray-900">${bdSoon.name}</b><span class="text-xs text-gray-400">${birthLabel(bdSoon.id)}</span></span>
       <span class="text-xs font-bold text-gray-400">D-${bdSoon.days}</span>
-    </button>` : '');
+    </div>` : '');
+
+  const emergencyHome = isLeader() ? `
+    <div class="card">
+      <h3 class="font-bold text-gray-800 text-sm mb-2">비상연락망</h3>
+      <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+        ${state.students.map(s => `<div class="min-w-0 border-b border-gray-100 pb-2">
+          <p class="text-xs font-semibold text-gray-800">${s.name}${s.role ? ` · ${s.role}` : ''}</p>
+          ${phoneOf(s.id) ? `<a href="tel:${phoneOf(s.id).replace(/-/g,'')}" class="text-xs text-blue-600">${esc(phoneOf(s.id))}</a>` : `<span class="text-xs text-gray-300">미등록</span>`}
+        </div>`).join('')}
+      </div>
+      <p class="text-[11px] text-gray-400 mt-2">연락처는 목사님 화면에만 표시됩니다.</p>
+    </div>` : '';
 
   el.innerHTML = `
     ${bdayHome}
@@ -1167,7 +1185,7 @@ function renderHome() {
           <p class="text-xs text-gray-500 font-semibold">${CLASS_NAME}</p>
           <p class="text-lg font-bold text-gray-800 mt-0.5">${started ? `${cw+1}주차 진행 중` : '시작 전'}</p>
           <p class="text-xs text-gray-500 mt-1">${fmt(wi.sun)}(일) ~ ${fmt(wi.sat)}(토)</p>
-          <p class="text-xs text-gray-400 mt-1">오늘 본문 · ${esc(todayRef() || '진도표에 없는 날')}</p>
+          <p class="text-xs text-gray-400 mt-1">오늘 본문 · ${esc(todayRef() || '본문이 없는 날')}</p>
         </div>
         <div class="text-right">
           <p class="text-3xl font-bold text-gray-700">${cw+1}<span class="text-base text-gray-400">/${WEEKS}</span></p>
@@ -1177,6 +1195,7 @@ function renderHome() {
     ${todo}
     ${mine}
     ${leaderBoard}
+    ${emergencyHome}
     <div class="card bg-gray-50 border border-gray-200">
       <p class="text-xs text-gray-700 leading-relaxed">
         한 주는 <b>주일</b>에 엽니다. 주일 설교를 노트로 남기고(<b>설교 노트</b>),
@@ -1224,51 +1243,6 @@ function shiftQtMonth(step) {
   if (i < 0 || i >= months.length) return;
   qtCalMonth = months[i];
   renderAll();
-}
-
-// 9·10월 진도표를 한 장으로 인쇄한다(브라우저에서 'PDF로 저장'을 고르면 PDF가 된다).
-function printQtCalendar() {
-  const months = ['2026-09','2026-10'];
-  const blocks = months.map(ym => {
-    const [y, m] = ym.split('-').map(Number);
-    const last = new Date(y, m, 0);
-    const first = new Date(y, m - 1, 1);
-    let cur = addDays(first, -first.getDay());
-    const rows = [];
-    while (cur <= last) {
-      const cells = [];
-      for (let k = 0; k < 7; k++) {
-        const c = addDays(cur, k), ds = iso(c);
-        if (c.getMonth() + 1 !== m) { cells.push('<td></td>'); continue; }
-        cells.push(`<td><div class="d">${c.getDate()}</div><div class="r">${esc(QT_SCHEDULE[ds] || '')}</div></td>`);
-      }
-      rows.push('<tr>' + cells.join('') + '</tr>');
-      cur = addDays(cur, 7);
-    }
-    return `<h2>${y}년 ${m}월</h2>
-      <table><thead><tr>${['일','월','화','수','목','금','토'].map(w=>`<th>${w}</th>`).join('')}</tr></thead>
-      <tbody>${rows.join('')}</tbody></table>`;
-  }).join('');
-  const w = window.open('', '_blank');
-  if (!w) { toast('팝업이 막혀 있어요 — 브라우저에서 허용해 주세요'); return; }
-  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
-    <title>${CLASS_NAME} 9·10월 큐티 진도표</title><style>
-    body{font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;margin:24px;color:#111}
-    h1{font-size:19px;margin:0 0 4px} .sub{font-size:12px;color:#666;margin-bottom:18px}
-    h2{font-size:15px;margin:18px 0 6px}
-    table{width:100%;border-collapse:collapse;table-layout:fixed}
-    th{font-size:11px;padding:4px;border:1px solid #ddd;background:#f6f6f6}
-    td{border:1px solid #ddd;height:62px;vertical-align:top;padding:3px}
-    .d{font-size:11px;font-weight:700}
-    .r{font-size:9px;color:#333;line-height:1.25;margin-top:2px;word-break:keep-all}
-    @page{size:A4 portrait;margin:12mm}
-    </style></head><body>
-    <h1>${CLASS_NAME} — 9·10월 큐티 진도표</h1>
-    <div class="sub">성서유니온 「청소년 매일성경」 · 매일 본문을 읽고 큐티 · D형 큐티 · 기도 영적일지를 씁니다</div>
-    ${blocks}
-    <script>setTimeout(function(){window.print();},400);<\/script>
-    </body></html>`);
-  w.document.close();
 }
 
 // ==========================================
@@ -1557,8 +1531,8 @@ function imageBox(kind, date, saved) {
     </label>`;
 }
 
-function renderQT() {
-  const el = document.getElementById('page-qt');
+function renderDailyQT() {
+  const el = document.getElementById('qt-daily');
   if (!slotOf(qtDate)) qtDate = dateOf(currentWeek(), 0);
   const { n, i } = slotOf(qtDate);
   const d = parseDate(qtDate);
@@ -1627,10 +1601,9 @@ function renderQT() {
         ${Object.keys(QT_PDF).map(ym => `
           <a href="./files/${ym}/youth-qt-${ym}.pdf" target="_blank" rel="noopener"
              class="flex-1 text-center bg-gray-50 border rounded-xl py-2.5 text-sm font-semibold text-gray-700">
-            📕 ${QT_PDF[ym]}</a>`).join('')}
-        <button onclick="printQtCalendar()" class="flex-1 bg-gray-50 border rounded-xl py-2.5 text-sm font-semibold text-gray-700">🗓️ 진도표</button>
+            ${QT_PDF[ym]} 매일성경</a>`).join('')}
       </div>
-      <p class="text-[11px] text-gray-400 mt-1.5">매일성경 한 달치 PDF (20MB 남짓) · 진도표 달력은 A4 두 장으로 인쇄됩니다</p>
+      <p class="text-[11px] text-gray-400 mt-1.5">성서유니온 청소년 매일성경 월별 PDF입니다.</p>
     </div>`;
 
   el.innerHTML = `
@@ -1638,7 +1611,7 @@ function renderQT() {
     ${calendar}
     <div class="card !py-3 text-center">
       <p class="text-xs text-gray-500">${n+1}주차 · ${dayLabel(qtDate)}</p>
-      <p class="text-base font-bold text-gray-900 mt-0.5">${esc(ref || '진도표에 없는 날')}</p>
+      <p class="text-base font-bold text-gray-900 mt-0.5">${esc(ref || '본문이 없는 날')}</p>
     </div>
 
     <div class="card !p-3">
@@ -1675,12 +1648,31 @@ function renderQT() {
     </div>
 
     <div class="card !py-3 text-center">
-      <p class="text-sm ${cntOf('qt',me,n)>=5?'text-blue-600 font-bold':'text-gray-600'}">이번 주 큐티 ${cntOf('qt',me,n)}일 / 7일</p>
-      <p class="text-xs text-gray-400 mt-0.5">매일이 목표입니다 — 하루 빠졌다고 그만두지 말고 오늘 것을 하세요</p>
+      <p class="text-sm ${cntOf('qt',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 큐티 ${cntOf('qt',me,n)}일 / 7일 · ${cntOf('qt',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
     </div>
 
     ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 그날 올린 묵상을 볼 수 있어요')}
 `;
+}
+
+function setQtSection(section) {
+  qtSection = section === 'dqt' ? 'dqt' : 'daily';
+  _editingDoc = null; _delArm = null; _pendingImg = null;
+  window.scrollTo(0, 0);
+  renderQT();
+}
+
+function renderQT() {
+  const daily = document.getElementById('qt-daily');
+  const dqt = document.getElementById('page-dqt');
+  document.getElementById('qt-tabs').innerHTML = `
+    <div class="grid grid-cols-2 gap-1 rounded-xl bg-gray-200 p-1">
+      <button onclick="setQtSection('daily')" class="rounded-lg py-2.5 text-sm font-bold ${qtSection==='daily'?'bg-white text-gray-900 shadow-sm':'text-gray-500'}">매일 큐티</button>
+      <button onclick="setQtSection('dqt')" class="rounded-lg py-2.5 text-sm font-bold ${qtSection==='dqt'?'bg-white text-gray-900 shadow-sm':'text-gray-500'}">D형 큐티</button>
+    </div>`;
+  daily.classList.toggle('hidden', qtSection !== 'daily');
+  dqt.classList.toggle('hidden', qtSection !== 'dqt');
+  if (qtSection === 'dqt') renderDQT(); else renderDailyQT();
 }
 
 // ==========================================
@@ -1823,6 +1815,9 @@ function renderDQT() {
     </div>`;
 
   el.innerHTML = tabs + `
+    <div class="card !py-3 text-center ${dqtDone(me,n)?'bg-green-50 border border-green-200':''}">
+      <p class="text-sm font-bold ${dqtDone(me,n)?'text-green-700':'text-gray-500'}">D형 큐티 · ${dqtDone(me,n)?'통과':'제출해야 통과'}</p>
+    </div>
     ${checkup}
     <div class="card !py-3">
       <p class="text-xs text-gray-500 text-center">${n+1}주차 · ${fmt(wi.sun)}(일) ~ ${fmt(wi.sat)}(토)</p>
@@ -1939,7 +1934,7 @@ function renderPray() {
     ${timer}
     <div class="card !py-3 text-center">
       <p class="text-xs text-gray-500">${n+1}주차 · ${dayLabel(prayDate)}</p>
-      <p class="text-sm font-bold text-gray-900 mt-0.5">오늘 본문 · ${esc(ref || '진도표에 없는 날')}</p>
+      <p class="text-sm font-bold text-gray-900 mt-0.5">오늘 본문 · ${esc(ref || '본문이 없는 날')}</p>
     </div>
     <div class="card">
       <h3 class="font-bold text-gray-800 text-sm">오늘의 기도 영적일지</h3>
@@ -1974,18 +1969,26 @@ function renderPray() {
         </div>`).join('')}
     </div>
     <div class="card !py-3 text-center">
-      <p class="text-sm ${cntOf('pray',me,n)>=5?'text-green-600 font-bold':'text-gray-600'}">이번 주 기도일지 ${cntOf('pray',me,n)}일 / 7일</p>
+      <p class="text-sm ${cntOf('pray',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 기도일지 ${cntOf('pray',me,n)}일 / 7일 · ${cntOf('pray',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
     </div>
     ${leaderView}`;
 }
 
 // ==========================================
-// 주일 설교 노트
+// 금요철야 · 주일 설교 노트
 // ==========================================
+function setSermonType(type) {
+  const s = slotOf(sermonDate);
+  sermonType = type === 'fri' ? 'fri' : 'sun';
+  sermonDate = dateOf(s ? s.n : currentWeek(), sermonType === 'fri' ? 5 : 0);
+  _pendingImg = null; _editingDoc = null; _delArm = null;
+  renderAll();
+}
 function renderSermon() {
   const el = document.getElementById('page-sermon');
-  if (!slotOf(sermonDate)) sermonDate = dateOf(currentWeek(), 0);
+  if (!slotOf(sermonDate)) sermonDate = dateOf(currentWeek(), sermonType === 'fri' ? 5 : 0);
   const s = slotOf(sermonDate), n = s.n;
+  const noteLabel = sermonType === 'fri' ? '금요철야' : '주일';
   const me = currentUser;
   loadDoc('sermon', me, sermonDate);
   const saved = getDoc('sermon', me, sermonDate);
@@ -1996,21 +1999,25 @@ function renderSermon() {
   const chips = `<div class="card !py-2">
     <div class="scroll-table"><div class="flex gap-1.5 pb-1">
       ${Array.from({length:WEEKS}, (_,k) => {
-        const ds = dateOf(k, 0), sel = ds === sermonDate;
-        const done = sermonOf(me, k) === 'O';
+        const ds = dateOf(k, sermonType === 'fri' ? 5 : 0), sel = ds === sermonDate;
+        const done = sermonOf(me, k, sermonType) === 'O';
         return `<button onclick="setDate('sermon','${ds}')" style="min-height:40px"
           class="px-3 py-2 rounded-xl text-xs font-bold flex-shrink-0 ${sel?'bg-gray-900 text-white':(done?'bg-green-100 text-green-700':'bg-white text-gray-600 border')}">
           ${fmt(parseDate(ds))}${done?' ✓':''}</button>`;
       }).join('')}
     </div></div>
-    <p class="text-[11px] text-gray-400 mt-1 text-center">주일 날짜를 고르세요 · 그 주 토요일까지 올릴 수 있어요</p>
+    <p class="text-[11px] text-gray-400 mt-1 text-center">${noteLabel} 날짜를 고르세요 · 그 주 토요일까지 올릴 수 있어요</p>
   </div>`;
 
   el.innerHTML = `
+    <div class="grid grid-cols-2 gap-1 rounded-xl bg-gray-200 p-1">
+      <button onclick="setSermonType('fri')" class="rounded-lg py-2.5 text-sm font-bold ${sermonType==='fri'?'bg-white text-gray-900 shadow-sm':'text-gray-500'}">금요철야 노트</button>
+      <button onclick="setSermonType('sun')" class="rounded-lg py-2.5 text-sm font-bold ${sermonType==='sun'?'bg-white text-gray-900 shadow-sm':'text-gray-500'}">주일 설교 노트</button>
+    </div>
     ${chips}
     <div class="card !py-3 text-center">
-      <p class="text-xs text-gray-500">${n+1}주차 주일</p>
-      <p class="text-base font-bold text-gray-900 mt-0.5">${dayLabel(sermonDate)} 설교 노트</p>
+      <p class="text-xs text-gray-500">${n+1}주차 ${noteLabel}</p>
+      <p class="text-base font-bold text-gray-900 mt-0.5">${dayLabel(sermonDate)} ${noteLabel} 노트</p>
       <p class="text-[11px] text-gray-400 mt-1">예배 때 손으로 적고, 집에 와서 사진으로 올립니다</p>
     </div>
     <div class="card">
@@ -2018,11 +2025,11 @@ function renderSermon() {
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
         ${hasContent('sermon', saved) ? `${docView('sermon', saved, me, sermonDate)}
-          <p class="text-[11px] text-gray-400 mt-2 text-center">🔒 지난 주일이라 새로 올릴 수 없어요</p>`
+          <p class="text-[11px] text-gray-400 mt-2 text-center">지난 예배라 새로 올릴 수 없어요</p>`
           : `<div class="text-center py-6">
               <p class="text-2xl">🔒</p>
-              <p class="text-sm text-gray-500 mt-1 font-semibold">${parseDate(sermonDate) > today0() ? '아직 오지 않은 주일이에요' : '이 주일 노트는 닫혔어요'}</p>
-              <p class="text-xs text-gray-400 mt-1">설교 노트는 <b>주일부터 그 주 토요일까지</b> 올릴 수 있어요.</p>
+              <p class="text-sm text-gray-500 mt-1 font-semibold">${parseDate(sermonDate) > today0() ? '아직 오지 않은 예배예요' : '이 설교 노트는 닫혔어요'}</p>
+              <p class="text-xs text-gray-400 mt-1">설교 노트는 <b>예배일부터 그 주 토요일까지</b> 올릴 수 있어요.</p>
             </div>`}`
       : `
       ${shown ? `
@@ -2056,7 +2063,7 @@ function renderSermon() {
       ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}
       ${hasContent('sermon', saved) ? noteBlock('sermon', me, sermonDate) : ''}`}
     </div>
-    ${peopleList('sermon', sermonDate, `${fmt(parseDate(sermonDate))} 주일 반 전체 노트`, '같은 설교를 어떻게 들었는지 서로 봅니다 · 비밀 댓글은 본인과 목사님만 봅니다')}`;
+    ${peopleList('sermon', sermonDate, `${fmt(parseDate(sermonDate))} ${noteLabel} 반 전체 노트`, '같은 설교를 어떻게 들었는지 서로 봅니다 · 비밀 댓글은 본인과 목사님만 봅니다')}`;
 }
 
 // ==========================================
@@ -2220,62 +2227,68 @@ function renderBday() {
 // ==========================================
 // 체크표
 // ==========================================
+// 한 사람 한 주 카드 — 홈(내 것)과 체크표(전체)가 같은 모양을 쓴다.
+function checkCard(s, n, compact) {
+  const wi = weekInfo(n);
+  const a = attOf(s.id, n), smFri = sermonOf(s.id, n, 'fri'), smSun = sermonOf(s.id, n, 'sun'), dq = dqtDone(s.id, n);
+  const edit = isLeader();
+  const dotRow = (label, field, cls) => `
+    <div class="flex items-end gap-1 mt-1.5">
+      <span class="text-[11px] text-gray-400 mb-2 w-12 flex-shrink-0">${label}</span>
+      ${DOW7.map((w,i) => {
+        const on = arrOf(field, s.id, n)[i];
+        return `<div class="flex flex-col items-center gap-0.5 flex-1 min-w-0">
+          <span class="text-[10px] ${i===0?'text-red-400':i===6?'text-blue-400':'text-gray-400'}">${w}</span>
+          <div class="dot7 w-full ${on?cls:''} ${edit?'':'opacity-70'}" onclick="toggleDot('${field}','${s.id}',${n},${i})">${on?'✓':''}</div>
+        </div>`;
+      }).join('')}
+      <span class="text-[11px] font-bold ${cntOf(field,s.id,n)>=4?'text-green-700':'text-gray-300'} mb-2 w-12 text-right flex-shrink-0">${cntOf(field,s.id,n)}/7<br>${cntOf(field,s.id,n)>=4?'통과':'미달'}</span>
+    </div>`;
+  return `<div class="card !p-3">
+    ${compact ? '' : `<div class="flex items-center gap-2 mb-2">
+      <span class="font-bold text-gray-800 text-sm">${s.name}</span>
+      ${s.role ? `<span class="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600">${s.role}</span>` : ''}
+    </div>`}
+    <div class="grid grid-cols-2 gap-1.5">
+      <div class="min-w-0">
+        <p class="text-[11px] text-gray-400 mb-0.5 truncate">금요철야 ${fmt(addDays(wi.sun,5))}</p>
+        <div class="check-cell ${smFri?'gate-'+smFri:'st-빈칸'} w-full ${edit?'':'opacity-70'}" onclick="cycleSermon('${s.id}',${n},'fri')">${smFri || '·'}</div>
+      </div>
+      <div class="min-w-0">
+        <p class="text-[11px] text-gray-400 mb-0.5 truncate">주일 설교 ${fmt(wi.sun)}</p>
+        <div class="check-cell ${smSun?'gate-'+smSun:'st-빈칸'} w-full ${edit?'':'opacity-70'}" onclick="cycleSermon('${s.id}',${n},'sun')">${smSun || '·'}</div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-[11px] text-gray-400 mb-0.5 truncate">D형 (주 1회)</p>
+        <div class="check-cell ${dq?'gate-O':'st-빈칸'} w-full ${edit?'':'opacity-70'}" onclick="toggleDqtWeek('${s.id}',${n})">${dq ? '통과' : '미달'}</div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-[11px] text-gray-400 mb-0.5 truncate">토요일 모임 ${fmt(wi.sat)}</p>
+        <div class="check-cell ${a?'st-'+a:'st-빈칸'} w-full ${edit?'':'opacity-70'}" onclick="cycleAtt('${s.id}',${n})">${a || '·'}</div>
+      </div>
+    </div>
+    ${dotRow('큐티','qt','on')}
+    ${dotRow('기도일지','pray','on-p')}
+  </div>`;
+}
+
 function renderCheck() {
   const el = document.getElementById('page-check');
+  if (!canSeeCheck()) { navigate('home'); return; }
   const n = checkWeek, wi = weekInfo(n);
   const tabs = `<div class="scroll-table -mx-1 px-1"><div class="flex gap-1.5 pb-1">
     ${Array.from({length:WEEKS}, (_,i) => `<button onclick="checkWeek=${i};renderAll()"
       class="px-3 py-2 rounded-xl text-xs font-bold flex-shrink-0 ${i===n?'bg-gray-900 text-white':'bg-white text-gray-600 border'}">${i+1}주</button>`).join('')}
   </div></div>`;
 
-  const list = isLeader() ? state.students : state.students.filter(s => s.id === currentUser);
-  const dotRow = (label, field, id, cls) => `
-    <div class="flex items-end gap-1 mt-1.5">
-      <span class="text-[11px] text-gray-400 mb-2 w-12 flex-shrink-0">${label}</span>
-      ${DOW7.map((w,i) => {
-        const on = arrOf(field, id, n)[i];
-        return `<div class="flex flex-col items-center gap-0.5 flex-1 min-w-0">
-          <span class="text-[10px] text-gray-400">${w}</span>
-          <div class="dot7 w-full ${on?cls:''} ${isLeader()?'':'opacity-70'}" onclick="toggleDot('${field}','${id}',${n},${i})">${on?'✓':''}</div>
-        </div>`;
-      }).join('')}
-      <span class="text-[11px] font-bold ${cntOf(field,id,n)>=5?'text-gray-800':'text-gray-300'} mb-2 w-7 text-right flex-shrink-0">${cntOf(field,id,n)}/7</span>
-    </div>`;
+  const rows = state.students.map(s => checkCard(s, n, false)).join('');
 
-  const rows = list.map(s => {
-    const a = attOf(s.id, n), sm = sermonOf(s.id, n), dq = dqtDone(s.id, n);
-    return `<div class="card !p-3">
-      <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-gray-800 text-sm">${s.name}</span>
-          ${s.role ? `<span class="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600">${s.role}</span>` : ''}
-        </div>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <div class="flex-1 min-w-0">
-          <p class="text-[11px] text-gray-400 mb-0.5 truncate">주일 설교 ${fmt(wi.sun)}</p>
-          <div class="check-cell ${sm?'gate-'+sm:'st-빈칸'} w-full ${isLeader()?'':'opacity-70'}" onclick="cycleSermon('${s.id}',${n})">${sm || '·'}</div>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[11px] text-gray-400 mb-0.5 truncate">D형 (주 1회)</p>
-          <div class="check-cell ${dq?'gate-O':'st-빈칸'} w-full ${isLeader()?'':'opacity-70'}" onclick="toggleDqtWeek('${s.id}',${n})">${dq ? 'O' : '·'}</div>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[11px] text-gray-400 mb-0.5 truncate">토요일 모임 ${fmt(wi.sat)}</p>
-          <div class="check-cell ${a?'st-'+a:'st-빈칸'} w-full ${isLeader()?'':'opacity-70'}" onclick="cycleAtt('${s.id}',${n})">${a || '·'}</div>
-        </div>
-      </div>
-      ${dotRow('큐티','qt',s.id,'on')}
-      ${dotRow('기도일지','pray',s.id,'on-p')}
-    </div>`;
-  }).join('');
-
-  const totals = isLeader() ? `
+  const totals = `
     <div class="card !p-0 overflow-hidden">
       <div class="scroll-table">
         <table class="w-full text-sm">
           <thead class="bg-gray-50 border-b">
-            <tr>${['이름','출석','지각','무지','결석','무결','설교','큐티','D형','기도'].map(h =>
+            <tr>${['이름','출석','지각','무지','결석','무결','금철','주일','큐티','D형','기도'].map(h =>
               `<th class="px-2 py-2 text-[11px] font-bold text-gray-500">${h}</th>`).join('')}</tr>
           </thead>
           <tbody>
@@ -2285,21 +2298,21 @@ function renderCheck() {
               return `<tr class="border-b last:border-0">
                 <td class="px-2 py-2 font-semibold text-gray-800 text-xs whitespace-nowrap">${s.name}</td>
                 ${cell(t.출석)}${cell(t.지각,1)}${cell(t.무단지각,1)}${cell(t.결석,1)}${cell(t.무단결석,1)}
-                ${cell(t.sermon)}${cell(t.qt)}${cell(t.dqt)}${cell(t.pray)}
+                ${cell(t.sermonFri)}${cell(t.sermonSun)}${cell(t.qt)}${cell(t.dqt)}${cell(t.pray)}
               </tr>`;
             }).join('')}
           </tbody>
         </table>
       </div>
       <p class="text-[11px] text-gray-400 px-3 py-2">지금까지 시작된 주(${totalOf(state.students[0].id).주차}주)를 모두 더한 값입니다.</p>
-    </div>` : '';
+    </div>`;
 
   el.innerHTML = tabs + `
     <div class="card !py-3 bg-gray-50 border border-gray-200">
       <p class="text-sm font-bold text-gray-900">${n+1}주차 · ${fmt(wi.sun)}(일) ~ ${fmt(wi.sat)}(토)</p>
       <p class="text-xs text-gray-700 mt-0.5">${isLeader()
         ? '칸을 누르면 상태가 바뀝니다 · 출석 → 지각 → 무단지각 → 결석 → 무단결석'
-        : '큐티·D형·기도일지는 올리면 그날 칸이 저절로 켜집니다'}</p>
+        : '반장은 보기만 할 수 있습니다 · 고치는 것은 목사님만'}</p>
     </div>` + rows + totals;
 }
 
