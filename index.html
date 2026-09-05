@@ -238,7 +238,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.17';
+const APP_BUILD = '2026-09-05.18';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -973,18 +973,13 @@ function paintHomeGallery() {
   const items = galleryItems();
   if (!items.length) return;
   _homeGalleryIndex = (_homeGalleryIndex + 1) % items.length;
-  img.style.opacity = '0';
-  setTimeout(() => {
-    if (!document.getElementById('home-gallery-img')) return;
-    img.src = items[_homeGalleryIndex].image;
-    img.alt = items[_homeGalleryIndex].caption || '제자반 갤러리 사진';
-    img.style.opacity = '1';
-    document.querySelectorAll('[data-gallery-dot]').forEach((d,i) => d.classList.toggle('bg-white', i === _homeGalleryIndex));
-  }, 180);
+  img.src = items[_homeGalleryIndex].image;
+  img.alt = items[_homeGalleryIndex].caption || '제자반 갤러리 사진';
+  document.querySelectorAll('[data-gallery-dot]').forEach((d,i) => d.classList.toggle('bg-white', i === _homeGalleryIndex));
 }
 function startHomeGallery() {
   clearInterval(_galleryTimer);
-  if (document.getElementById('home-gallery-img') && galleryItems().length > 1) _galleryTimer = setInterval(paintHomeGallery, 3000);
+  if (document.getElementById('home-gallery-img') && galleryItems().length > 1) _galleryTimer = setInterval(paintHomeGallery, 1500);
 }
 function renderGallery() {
   const el = document.getElementById('page-gallery');
@@ -1230,9 +1225,9 @@ function renderHome() {
   const homePhotos = galleryItems();
   _homeGalleryIndex = homePhotos.length ? _homeGalleryIndex % homePhotos.length : 0;
   const homeGallery = homePhotos.length ? `
-    <button onclick="navigate('gallery')" class="relative block w-full overflow-hidden rounded-2xl bg-gray-900 shadow-sm" style="min-height:unset">
+    <button onclick="navigate('gallery')" class="relative block w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm" style="min-height:unset">
       <img id="home-gallery-img" src="${homePhotos[_homeGalleryIndex].image}" alt="${esc(homePhotos[_homeGalleryIndex].caption || '제자반 갤러리 사진')}"
-        class="w-full aspect-[16/9] object-cover transition-opacity duration-200">
+        class="w-full aspect-[16/9] object-cover">
       <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-10 text-left text-sm font-bold text-white">확~마! 갤러리</span>
       <span class="absolute bottom-3 right-3 flex gap-1">${homePhotos.map((_,i)=>`<i data-gallery-dot class="h-1.5 w-1.5 rounded-full ${i===_homeGalleryIndex?'bg-white':'bg-white/40'}"></i>`).join('')}</span>
     </button>` : '';
