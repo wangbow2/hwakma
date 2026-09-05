@@ -252,7 +252,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.25';
+const APP_BUILD = '2026-09-06.1';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1780,13 +1780,24 @@ function renderDailyQT() {
       const mine = slot && !isLeader() ? qtOf(me, slot.n)[slot.i] : false;
       const cnt  = slot ? state.students.filter(x => qtOf(x.id, slot.n)[slot.i]).length : 0;
       const sel = ds === qtDate, isToday = ds === todayStr;
-      const bg = !slot ? 'bg-gray-50' : mine ? 'bg-green-100' : isToday ? 'bg-blue-50' : 'bg-white border';
-      const ring = sel ? 'ring-2 ring-gray-900' : (isToday && slot ? 'ring-1 ring-blue-300' : '');
-      const numC = !slot ? 'text-gray-300' : mine ? 'text-green-700' : isToday ? 'text-blue-700' : 'text-gray-700';
+      // 주일은 붉게, 토요일은 푸르게. 한 주가 주일에 열려 토요일 모임으로 닫히는 것이
+      // 달력에서도 그대로 보이게 한다.
+      const dow = c.getDay(), isSun = dow === 0, isSat = dow === 6;
+      const bg = !slot ? (isSun ? 'bg-red-50' : isSat ? 'bg-blue-50' : 'bg-gray-50')
+               : mine ? 'bg-green-100'
+               : isSun ? 'bg-red-50 border border-red-100'
+               : isSat ? 'bg-blue-50 border border-blue-100'
+               : 'bg-white border';
+      // 오늘은 색이 아니라 테두리로 짚는다 — 주말 색과 부딪히지 않도록.
+      const ring = sel ? 'ring-2 ring-gray-900' : (isToday && slot ? 'ring-2 ring-gray-400' : '');
+      const numC = !slot ? (isSun ? 'text-red-200' : isSat ? 'text-blue-200' : 'text-gray-300')
+                 : mine ? 'text-green-700'
+                 : isSun ? 'text-red-600' : isSat ? 'text-blue-600' : 'text-gray-700';
+      const refC = mine ? 'text-green-500' : isSun ? 'text-red-300' : isSat ? 'text-blue-300' : 'text-gray-400';
       cells.push(`<div class="flex-1 min-w-0 rounded-lg py-1 px-0.5 text-center ${bg} ${ring} ${slot?'cursor-pointer active:scale-95':''} transition-all"
         ${slot ? `onclick="setDate('qt','${ds}')"` : ''}>
         <p class="text-[11px] font-bold ${numC}">${c.getDate()}</p>
-        <p class="text-[8px] leading-tight ${mine?'text-green-500':'text-blue-400'} truncate">${qtShortRef(ds)}</p>
+        <p class="text-[8px] leading-tight ${refC} truncate">${qtShortRef(ds)}</p>
         ${slot ? (!isLeader()
             ? `<p class="text-[9px] ${mine?'text-green-600':'text-transparent'}">✓</p>`
             : `<p class="text-[9px] ${cnt?'text-blue-600 font-bold':'text-transparent'}">${cnt||0}</p>`)
@@ -1805,7 +1816,7 @@ function renderDailyQT() {
       </div>
       <div class="flex gap-0.5 mb-1">
         ${['일','월','화','수','목','금','토'].map((w,k) =>
-          `<div class="flex-1 text-center text-[10px] font-semibold ${k===0?'text-red-400':k===6?'text-blue-400':'text-gray-400'}">${w}</div>`).join('')}
+          `<div class="flex-1 text-center text-[10px] font-bold ${k===0?'text-red-500':k===6?'text-blue-500':'text-gray-400'}">${w}</div>`).join('')}
       </div>
       ${rows.join('')}
       <p class="text-[11px] text-gray-400 mt-1 text-center">
