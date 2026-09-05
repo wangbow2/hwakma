@@ -64,6 +64,8 @@
   button, .btn { min-height:44px; }
   .nav-btn { min-height:unset; }
   .card { background:#fff; border-radius:12px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04); padding:16px; }
+  .phone-detail summary { list-style:none; }
+  .phone-detail summary::-webkit-details-marker { display:none; }
 
   /* D형 큐티 4단계 색 — 관찰(파랑) 해석(보라) 느낀점(주황) 적용(초록) */
   .step-obs  { border-left:4px solid #60A5FA; }
@@ -231,7 +233,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.5';
+const APP_BUILD = '2026-09-05.6';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1083,39 +1085,39 @@ function renderHome() {
   const inRange = !!s;
   const n = s ? s.n : cw, i = s ? s.i : 0;
 
-  const myQt   = inRange ? qtOf(me,n)[i]   : false;
   const myDqt  = inRange ? dqtDone(me,n)   : false;
-  const myPray = inRange ? prayOf(me,n)[i] : false;
+  const myQtCount = inRange ? cntOf('qt',me,n) : 0;
+  const myPrayCount = inRange ? cntOf('pray',me,n) : 0;
   const myFriSermon = sermonOf(me, n, 'fri') === 'O';
   const mySunSermon = sermonOf(me, n, 'sun') === 'O';
 
   const todo = `
     <div class="card">
       <div class="flex items-center justify-between mb-2">
-        <h3 class="font-bold text-gray-800 text-sm">오늘 할 일</h3>
-        <span class="text-[11px] text-gray-400">${dayLabel(t)}</span>
+        <h3 class="font-bold text-gray-800 text-sm">이번 주 할 일</h3>
+        <span class="text-[11px] text-gray-400">${n+1}주차</span>
       </div>
-      ${!inRange ? `<p class="text-sm text-gray-500 py-4 text-center">오늘은 제자반 기간이 아니에요</p>` : `
-      <div class="space-y-2">
-        <button onclick="navigate('qt')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myQt?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">큐티<span class="text-[11px] font-normal text-gray-400">${esc(todayRef())}</span></span>
-          ${doneChip(myQt, myQt?'했어요':'아직')}
+      ${!inRange ? `<p class="text-sm text-gray-500 py-4 text-center">제자반 기간이 아니에요</p>` : `
+      <div class="grid grid-cols-5 gap-1.5">
+        <button onclick="navigate('qt')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myQtCount>=4?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
+          <span class="text-[11px] leading-tight font-bold text-gray-800">큐티</span>
+          <span class="text-[10px] mt-1 font-semibold ${myQtCount>=4?'text-green-700':'text-gray-400'}">${myQtCount}/4</span>
         </button>
-        <button onclick="navigate('dqt')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myDqt?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">D형 큐티<span class="text-[11px] font-normal text-gray-400">이번 주 한 번 · 손으로 써서 사진</span></span>
-          ${doneChip(myDqt, myDqt?'냈어요':'아직')}
+        <button onclick="navigate('dqt')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myDqt?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
+          <span class="text-[11px] leading-tight font-bold text-gray-800">D형<br>큐티</span>
+          <span class="text-[10px] mt-1 font-semibold ${myDqt?'text-green-700':'text-gray-400'}">${myDqt?'완료':'미완료'}</span>
         </button>
-        <button onclick="navigate('pray')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myPray?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="flex items-center gap-2 text-sm font-semibold text-gray-800">기도 영적일지<span class="text-[11px] font-normal text-gray-400">하루 10~15분</span></span>
-          ${doneChip(myPray, myPray?'했어요':'아직')}
+        <button onclick="navigate('pray')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myPrayCount>=4?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
+          <span class="text-[11px] leading-tight font-bold text-gray-800">기도<br>영적일지</span>
+          <span class="text-[10px] mt-1 font-semibold ${myPrayCount>=4?'text-green-700':'text-gray-400'}">${myPrayCount}/4</span>
         </button>
-        <button onclick="navigate('sermon');setSermonType('fri')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${myFriSermon?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="text-sm font-semibold text-gray-800">금요철야 노트 <span class="text-[11px] font-normal text-gray-400">${fmt(addDays(weekInfo(n).sun,5))}</span></span>
-          ${doneChip(myFriSermon, myFriSermon?'냈어요':'아직')}
+        <button onclick="navigate('sermon');setSermonType('fri')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myFriSermon?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
+          <span class="text-[11px] leading-tight font-bold text-gray-800">금철<br>노트</span>
+          <span class="text-[10px] mt-1 font-semibold ${myFriSermon?'text-green-700':'text-gray-400'}">${myFriSermon?'완료':'미완료'}</span>
         </button>
-        <button onclick="navigate('sermon');setSermonType('sun')" class="w-full flex items-center justify-between px-3 py-3 rounded-xl border ${mySunSermon?'bg-green-50 border-green-200':'bg-white'}">
-          <span class="text-sm font-semibold text-gray-800">주일 설교 노트 <span class="text-[11px] font-normal text-gray-400">${fmt(weekInfo(n).sun)}</span></span>
-          ${doneChip(mySunSermon, mySunSermon?'냈어요':'아직')}
+        <button onclick="navigate('sermon');setSermonType('sun')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${mySunSermon?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
+          <span class="text-[11px] leading-tight font-bold text-gray-800">주일<br>설교노트</span>
+          <span class="text-[10px] mt-1 font-semibold ${mySunSermon?'text-green-700':'text-gray-400'}">${mySunSermon?'완료':'미완료'}</span>
         </button>
       </div>`}
     </div>`;
@@ -1168,13 +1170,23 @@ function renderHome() {
   const emergencyHome = isLeader() ? `
     <div class="card">
       <h3 class="font-bold text-gray-800 text-sm mb-2">비상연락망</h3>
-      <div class="grid grid-cols-2 gap-x-4 gap-y-2">
-        ${state.students.map(s => `<div class="min-w-0 border-b border-gray-100 pb-2">
-          <p class="text-xs font-semibold text-gray-800">${s.name}${s.role ? ` · ${s.role}` : ''}</p>
-          ${phoneOf(s.id) ? `<a href="tel:${phoneOf(s.id).replace(/-/g,'')}" class="text-xs text-blue-600">${esc(phoneOf(s.id))}</a>` : `<span class="text-xs text-gray-300">미등록</span>`}
-        </div>`).join('')}
+      <div class="space-y-1">
+        ${state.students.map(s => `<details class="phone-detail rounded-xl bg-gray-50">
+          <summary class="flex items-center justify-between px-3 py-2 cursor-pointer select-none">
+            <span class="text-sm font-semibold text-gray-800">${s.name}${s.role ? ` <span class="text-[10px] text-gray-400">${s.role}</span>` : ''}</span>
+            <span class="flex items-center gap-2">
+              <span class="text-[11px] font-semibold text-gray-500">${birthOf(s.id) ? birthLabel(s.id) : '생일 미등록'}</span>
+              <span class="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-lg shadow-sm" aria-label="${s.name} 전화번호 보기">📞</span>
+            </span>
+          </summary>
+          <div class="flex items-center justify-between border-t border-white px-3 py-2">
+            ${phoneOf(s.id) ? `<span class="text-sm font-semibold tracking-wide text-gray-700">${esc(phoneOf(s.id))}</span>
+              <a href="tel:${phoneOf(s.id).replace(/-/g,'')}" class="rounded-full bg-green-600 px-4 py-2 text-xs font-bold text-white">전화 걸기</a>`
+              : `<span class="text-xs text-gray-400">등록된 번호가 없습니다</span>`}
+          </div>
+        </details>`).join('')}
       </div>
-      <p class="text-[11px] text-gray-400 mt-2">연락처는 목사님 화면에만 표시됩니다.</p>
+      <p class="text-[11px] text-gray-400 mt-2">전화 버튼을 누르면 번호가 열립니다. 이 목록은 목사님 화면에만 보입니다.</p>
     </div>` : '';
 
   el.innerHTML = `
