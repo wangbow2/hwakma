@@ -1,6 +1,6 @@
 // 배포할 때마다 이 값만 올리면 된다. 앱이 새 버전을 알아채는 유일한 기준.
 // index.html의 APP_BUILD와 반드시 같은 값이어야 한다.
-const APP_BUILD = '2026-09-05.10';
+const APP_BUILD = '2026-09-05.12';
 const CACHE_NAME = 'hwakma-' + APP_BUILD;
 const ASSETS = [
   './',
