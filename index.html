@@ -99,6 +99,7 @@
   <div id="page-dqt" class="page p-4 space-y-4"></div>
   <div id="page-pray" class="page p-4 space-y-4"></div>
   <div id="page-sermon" class="page p-4 space-y-4"></div>
+  <div id="page-bday" class="page p-4 space-y-4"></div>
   <div id="page-check" class="page p-4 space-y-4"></div>
   <div id="page-guide" class="page p-4 space-y-4"></div>
 </main>
@@ -124,6 +125,10 @@
     <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('sermon')" id="nav-sermon">
       <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 18V6a2 2 0 0 1 2-2h6v16H5a2 2 0 0 1-2-2z"/><path d="M21 18V6a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 0 2-2z"/></svg>
       <span class="text-[11px] mt-0.5 font-medium text-gray-500">설교</span>
+    </button>
+    <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('bday')" id="nav-bday">
+      <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 21h16v-7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3z"/><path d="M4 15c1.5 1 2.5 1 4 0s2.5-1 4 0 2.5 1 4 0 2.5-1 4 0"/><path d="M12 8V5"/><path d="M12 5c0-1 1-2 1-2"/></svg>
+      <span class="text-[11px] mt-0.5 font-medium text-gray-500">생일</span>
     </button>
     <button class="nav-btn flex flex-col items-center py-1 px-1" onclick="navigate('check')" id="nav-check">
       <svg class="w-5 h-5 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -235,7 +240,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.1';
+const APP_BUILD = '2026-09-05.2';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-09-05(토) ~ 2026-11-06(금)
 const DEFAULT_START = '2026-09-05';   // 첫 토요일 — 인도자가 앱에서 바꿀 수 있다
@@ -438,6 +443,9 @@ let state = {
   dqt: {},     // `${id}_w${n}`     → [bool x7]
   pray: {},    // `${id}_w${n}`     → [bool x7]
   sermon: {},  // `${id}_w${n}`     → 'O' | 'X' | ''  (주일 설교 노트)
+  // 생년월일·연락처. 공개 저장소에 남기지 않으려고 코드에 적지 않고 서버에만 둔다.
+  // { d01: { birth:'2010-12-11', phone:'010-...' } }
+  profiles: {},
   memos: {}
 };
 let currentUser = null;   // 로컬 전용 — 서버에 올리지 않는다
@@ -523,7 +531,7 @@ function initFirestore() {
   });
 }
 function applyRemote(data) {
-  ['startDate','pins','att','qt','dqt','pray','sermon','memos'].forEach(k => {
+  ['startDate','pins','att','qt','dqt','pray','sermon','profiles','memos'].forEach(k => {
     if (data[k] !== undefined) state[k] = data[k];
   });
   if (Array.isArray(data.students) && data.students.length) {
@@ -697,7 +705,8 @@ const KINDS = {
   qt:     { label:'큐티',        field:'qt'   },
   dqt:    { label:'D형 큐티',    field:'dqt'  },
   pray:   { label:'기도 영적일지', field:'pray' },
-  sermon: { label:'주일 설교 노트', field:null  }
+  sermon: { label:'주일 설교 노트', field:null  },
+  bday:   { label:'생일 축하 글',    field:null  }
 };
 const _docs = {};      // `${kind}_${id}_${date}` → data | null
 const _loading = {};
@@ -709,8 +718,7 @@ function esc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-function loadDoc(kind, id, date) {
-  const k = dkey(kind, id, date);
+function loadDocKey(k) {
   if (_docs[k] !== undefined || _loading[k]) return;
   if (!_FS_OK) { _docs[k] = null; return; }
   _loading[k] = true;
@@ -719,25 +727,27 @@ function loadDoc(kind, id, date) {
     .catch(e => { console.warn('불러오기 실패:', e); _docs[k] = null; })
     .then(() => { delete _loading[k]; renderAll(); });
 }
+function loadDoc(kind, id, date) { loadDocKey(dkey(kind, id, date)); }
 function getDoc(kind, id, date) { return _docs[dkey(kind, id, date)]; }
 // 글이 한 자도 없으면 '낸 것'으로 치지 않는다.
 function hasContent(kind, doc) {
   if (!doc) return false;
   if (kind === 'qt')     return !!((doc.text||'').trim() || doc.image);
-  if (kind === 'dqt')    return !!((doc.obs||'').trim() || (doc.int||'').trim() || (doc.feel||'').trim() || (doc.apply||'').trim());
+  if (kind === 'dqt')    return !!(doc.image || (doc.memo||'').trim());
   if (kind === 'pray')   return !!((doc.verse||'').trim() || (doc.read||'').trim() || (doc.question||'').trim() || (doc.feel||'').trim() || (doc.prayer||'').trim());
-  if (kind === 'sermon') return !!((doc.title||'').trim() || (doc.summary||'').trim() || (doc.grace||'').trim() || (doc.apply||'').trim() || doc.image);
+  if (kind === 'sermon') return !!(doc.image || (doc.title||'').trim() || (doc.memo||'').trim());
+  if (kind === 'bday')   return !!(Array.isArray(doc.msgs) && doc.msgs.length);
   return false;
 }
 function submitted(kind, id, date) { return hasContent(kind, getDoc(kind, id, date)); }
 
 // 제출하면 그날 체크가 함께 켜진다 — 냈는데 체크가 안 되는 일이 없도록.
 function markCheck(kind, id, date, on) {
+  const f = (KINDS[kind] || {}).field;
+  if (kind !== 'sermon' && !f) return;
   const s = slotOf(date);
   if (!s) return;
   if (kind === 'sermon') { pushPatch({ sermon: { [weekKey(id, s.n)]: on ? 'O' : '' } }); return; }
-  const f = KINDS[kind].field;
-  if (!f) return;
   const arr = arrOf(f, id, s.n).slice();
   arr[s.i] = !!on;
   pushPatch({ [f]: { [weekKey(id, s.n)]: arr } });
@@ -934,17 +944,18 @@ function submitQt(date) {
   _pendingImg = null;
   saveDoc('qt', id, date, { text, image, late: isLate(date) }, '큐티를 올렸어요!');
 }
+// D형 큐티는 공책에 손으로 쓰고, 그것을 찍어 올린다.
 function submitDqt(date) {
   const id = currentUser;
   if (!canWrite(date)) { toast('그날은 닫혔어요'); renderAll(); return; }
   const prev = getDoc('dqt', id, date) || {};
-  const d = { obs: val('dqt-obs'), int: val('dqt-int'), feel: val('dqt-feel'), apply: val('dqt-apply'),
+  const d = { image: _pendingImg || prev.image || '', memo: val('dqt-memo'),
               applyDone: !!prev.applyDone, ref: QT_SCHEDULE[date] || '', late: isLate(date) };
-  if (!d.obs && !d.int && !d.feel && !d.apply) { toast('네 칸 중 하나라도 적어주세요'); return; }
-  if (!d.apply) { toast('적용은 꼭 적어주세요 — 손에 잡히는 한 가지'); return; }
+  if (!d.image) { toast('손으로 쓴 D형 큐티를 사진으로 올려주세요'); return; }
+  _pendingImg = null;
   saveDoc('dqt', id, date, d, 'D형 큐티를 올렸어요!');
 }
-// 적용은 다음 날 지켰는지 표시한다 — 적어만 두고 넘어가지 않도록.
+// 어제 공책에 적은 적용을 오늘 지켰는지 표시한다 — 적어만 두고 넘어가지 않도록.
 function toggleApplyDone(id, date) {
   if (id !== currentUser && !canManage()) return;
   const prev = getDoc('dqt', id, date);
@@ -967,14 +978,14 @@ function submitPray(date) {
   if (!d.verse && !d.read && !d.question && !d.feel && !d.prayer) { toast('한 칸이라도 적어주세요'); return; }
   saveDoc('pray', id, date, d, '기도 영적일지를 올렸어요!');
 }
+// 설교 노트도 손으로 쓴 것을 찍어 올린다. 제목만 적으면 피드에서 알아보기 쉽다.
 function submitSermon(date) {
   const id = currentUser;
   if (!canWriteSermon(date)) { toast('그 주일 노트는 닫혔어요'); renderAll(); return; }
   const prev = getDoc('sermon', id, date) || {};
-  const d = { title: val('sm-title'), passage: val('sm-passage'), preacher: val('sm-preacher'),
-              summary: val('sm-summary'), grace: val('sm-grace'), apply: val('sm-apply'),
+  const d = { title: val('sm-title'), passage: val('sm-passage'), memo: val('sm-memo'),
               image: _pendingImg || prev.image || '' };
-  if (!d.title && !d.summary && !d.grace && !d.apply && !d.image) { toast('한 칸이라도 적거나 사진을 올려주세요'); return; }
+  if (!d.image) { toast('손으로 쓴 설교 노트를 사진으로 올려주세요'); return; }
   _pendingImg = null;
   saveDoc('sermon', id, date, d, '설교 노트를 올렸어요!');
 }
@@ -1028,7 +1039,7 @@ function renderAll() {
   document.getElementById('btn-settings').classList.toggle('hidden', !isLeader());
   document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
   ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
-     sermon: renderSermon, check: renderCheck, guide: renderGuide }[currentPage] || renderHome)();
+     sermon: renderSermon, bday: renderBday, check: renderCheck, guide: renderGuide }[currentPage] || renderHome)();
 }
 
 function todayRef() { return QT_SCHEDULE[iso(today0())] || ''; }
@@ -1125,7 +1136,22 @@ function renderHome() {
       </div>
     </div>` : '';
 
+  const bdToday = todaysBirthdays();
+  const bdSoon = upcomingBirthdays().filter(x => x.days > 0)[0];
+  const bdayHome = bdToday.length ? `
+    <div class="card bg-gray-900 cursor-pointer" onclick="navigate('bday')">
+      <p class="text-2xl text-center">🎉</p>
+      <p class="text-white font-bold text-center mt-1">오늘은 ${bdToday.map(x=>x.name).join(' · ')} 생일!</p>
+      <p class="text-white/60 text-xs text-center mt-1">눌러서 축하 한마디 남기기</p>
+    </div>`
+    : (bdSoon ? `
+    <button onclick="navigate('bday')" class="card w-full flex items-center justify-between">
+      <span class="flex items-center gap-2 text-sm text-gray-700">🎂 다음 생일<b class="text-gray-900">${bdSoon.name}</b><span class="text-xs text-gray-400">${birthLabel(bdSoon.id)}</span></span>
+      <span class="text-xs font-bold text-gray-400">D-${bdSoon.days}</span>
+    </button>` : '');
+
   el.innerHTML = `
+    ${bdayHome}
     <div class="card">
       <div class="flex items-center justify-between">
         <div>
@@ -1237,42 +1263,120 @@ function printQtCalendar() {
 }
 
 // ==========================================
+// 비밀 댓글 — 낸 사람과 목사님, 둘만 보는 칸.
+// 제출물과 다른 문서에 담아 화면에서 완전히 갈라 둔다.
+// (아이들 화면에는 불러오지도 않는다.)
+// ==========================================
+function noteKey(kind, id, date) { return `note_${kind}_${id}_${date}`; }
+function loadNote(kind, id, date) { loadDocKey(noteKey(kind, id, date)); }
+function getNote(kind, id, date) { return _docs[noteKey(kind, id, date)]; }
+function noteMsgs(kind, id, date) {
+  const d = getNote(kind, id, date);
+  return d && Array.isArray(d.msgs) ? d.msgs : [];
+}
+function canSeeNote(id) { return id === currentUser || canManage(); }
+function hasLeaderNote(kind, id, date) { return noteMsgs(kind, id, date).some(m => m.leader); }
+
+function addNote(kind, id, date) {
+  if (!canSeeNote(id)) return;
+  const ta = document.getElementById(`note-${kind}-${id}`);
+  const text = (ta ? ta.value : '').trim();
+  if (!text) { toast('내용을 적어주세요'); return; }
+  const k = noteKey(kind, id, date);
+  const msgs = noteMsgs(kind, id, date).concat([{
+    by: currentUser, name: (findUser(currentUser)||{}).name || '', leader: isLeader(),
+    text, at: new Date().toISOString()
+  }]);
+  const doc = { kind:'note', target:kind, studentId:id, date, msgs, updatedAt:new Date().toISOString() };
+  _docs[k] = doc;
+  if (ta) ta.value = '';
+  renderAll();
+  if (!_FS_OK) { toast('저장했어요 (인터넷이 없어 이 기기에만)'); return; }
+  _db.collection('discipleDocs').doc(k).set(doc)
+    .then(() => toast(isLeader() ? '피드백을 남겼습니다' : '답글을 남겼어요'))
+    .catch(e => { console.warn('비밀 댓글 저장 실패:', e); toast('저장이 안 됐어요. 잠시 뒤 다시 눌러주세요'); });
+}
+function removeNote(kind, id, date, idx) {
+  if (!canManage()) return;
+  const k = noteKey(kind, id, date);
+  const msgs = noteMsgs(kind, id, date).slice();
+  msgs.splice(idx, 1);
+  const doc = { kind:'note', target:kind, studentId:id, date, msgs, updatedAt:new Date().toISOString() };
+  _docs[k] = doc;
+  renderAll();
+  if (!_FS_OK) return;
+  _db.collection('discipleDocs').doc(k).set(doc)
+    .then(() => toast('지웠습니다'))
+    .catch(e => console.warn('비밀 댓글 삭제 실패:', e));
+}
+
+// 낸 사람과 목사님에게만 그려 준다. 그 밖의 사람에게는 아예 없는 칸이다.
+function noteBlock(kind, id, date) {
+  if (!canSeeNote(id)) return '';
+  loadNote(kind, id, date);
+  const doc = getNote(kind, id, date);
+  const msgs = noteMsgs(kind, id, date);
+  const who = (findUser(id)||{}).name || '';
+  const mine = id === currentUser;
+  return `<div class="mt-3 rounded-xl border border-dashed border-indigo-200 p-3" style="background:#F8F7FF">
+    <p class="text-[11px] font-bold text-indigo-700">🔒 비밀 댓글 · ${mine ? '나와 목사님만 보입니다' : `${who}와 목사님만 보입니다`}</p>
+    ${doc === undefined ? `<p class="text-xs text-gray-400 mt-2">불러오는 중…</p>` : `
+      ${msgs.length ? `<div class="mt-2 space-y-1.5">
+        ${msgs.map((m, k) => `<div class="rounded-xl px-3 py-2 ${m.leader ? 'bg-indigo-600' : 'bg-white border'}">
+          <p class="text-sm leading-relaxed whitespace-pre-wrap ${m.leader ? 'text-white' : 'text-gray-800'}">${esc(m.text)}</p>
+          <div class="flex items-center justify-between mt-1">
+            <p class="text-[11px] ${m.leader ? 'text-white/60' : 'text-gray-400'}">${esc(m.name)}${m.leader ? ' 목사님' : ''} · ${m.at ? new Date(m.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</p>
+            ${canManage() ? `<button onclick="removeNote('${kind}','${id}','${date}',${k})" style="min-height:24px" class="text-[11px] px-1 ${m.leader ? 'text-white/60' : 'text-red-400'}">지우기</button>` : ''}
+          </div>
+        </div>`).join('')}
+      </div>` : `<p class="text-xs text-gray-400 mt-2">${isLeader() ? '아직 피드백을 달지 않았습니다.' : '아직 목사님 피드백이 없어요.'}</p>`}
+      <textarea id="note-${kind}-${id}" rows="2"
+        placeholder="${isLeader() ? '피드백을 적어주세요 — 이 아이만 봅니다' : '목사님께 묻고 싶은 것이나 답글'}"
+        class="w-full border rounded-xl p-2.5 text-sm resize-none mt-2"></textarea>
+      <button onclick="addNote('${kind}','${id}','${date}')" style="min-height:38px"
+        class="w-full mt-1.5 py-2 rounded-xl font-bold text-xs ${isLeader() ? 'bg-indigo-600 text-white' : 'bg-white border text-gray-700'}">
+        ${isLeader() ? '피드백 남기기' : '답글 남기기'}
+      </button>`}
+  </div>`;
+}
+
+// ==========================================
 // 제출물 보기 — 종류마다 칸이 다르지만 그리는 방법은 하나로 묶는다.
 // ==========================================
 const DOC_FIELDS = {
   qt:   [['text','묵상',6]],
-  dqt:  [['obs','관찰',4],['int','해석',4],['feel','느낀점',4],['apply','적용',3]],
+  // D형 큐티와 설교 노트는 공책에 손으로 쓰고 사진으로 올린다.
+  // 여기 남은 글칸은 사진을 알아보게 돕는 짧은 메모뿐이다.
+  dqt:  [['memo','한 줄 메모(안 써도 됩니다)',2]],
   pray: [['verse','오늘 말씀 한 구절',2],['read','이 말씀으로 읽은 내 상황',4],
          ['question','영적으로 생긴 궁금증',3],['feel','느낀점',3],['prayer','기도',3]],
-  sermon:[['title','설교 제목',1],['passage','본문',1],['preacher','설교자',1],
-          ['summary','설교 요약',5],['grace','은혜받은 점',3],['apply','적용',3]]
+  sermon:[['title','설교 제목',1],['passage','본문',1],['memo','한 줄 메모(안 써도 됩니다)',2]]
 };
+// 네 단계 색 — 안내 화면에서 쓴다.
 const DQT_STYLE = { obs:['step-obs','b-obs','관찰'], int:['step-int','b-int','해석'],
                     feel:['step-feel','b-feel','느낀점'], apply:['step-app','b-app','적용'] };
 
 function docView(kind, doc, id, date) {
   if (!doc) return '';
-  if (kind === 'dqt') {
-    const body = DOC_FIELDS.dqt.map(([f,lab]) => {
-      if (!(doc[f]||'').trim()) return '';
-      const [bd, bg] = DQT_STYLE[f];
-      return `<div class="${bd} bg-gray-50 rounded-r-xl px-3 py-2 mb-2">
-        <span class="step-badge ${bg}">${lab}</span>
-        <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mt-1">${esc(doc[f])}</p>
-      </div>`;
-    }).join('');
-    const canCheck = (id === currentUser || canManage()) && (doc.apply||'').trim();
-    return body + (canCheck ? `
-      <button onclick="toggleApplyDone('${id}','${date}')"
-        class="w-full mt-1 py-2.5 rounded-xl text-sm font-bold ${doc.applyDone?'bg-green-100 text-green-700':'bg-white border border-gray-300 text-gray-600'}">
-        ${doc.applyDone ? '✓ 적용을 지켰습니다' : '적용을 지켰으면 눌러주세요'}
-      </button>`
-      : (doc.applyDone ? `<p class="text-xs text-green-700 font-bold">✓ 적용을 지켰습니다</p>` : ''));
+  // 손으로 쓴 것을 찍어 올리는 둘 — 사진이 먼저다.
+  if (kind === 'dqt' || kind === 'sermon') {
+    const head = kind === 'sermon' && ((doc.title||'').trim() || (doc.passage||'').trim())
+      ? `<p class="text-sm font-bold text-gray-900">${esc(doc.title||'')}
+           ${doc.passage ? `<span class="text-xs font-normal text-gray-500 ml-1">${esc(doc.passage)}</span>` : ''}</p>` : '';
+    const img = doc.image
+      ? `<img src="${doc.image}" onclick="showImg(this.src)" class="w-full rounded-xl border mt-1 cursor-pointer" style="max-height:420px;object-fit:contain;background:#F9FAFB">`
+      : '';
+    const memo = (doc.memo||'').trim()
+      ? `<p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 mt-2">${esc(doc.memo)}</p>` : '';
+    const apply = kind === 'dqt' && (id === currentUser || canManage())
+      ? `<button onclick="toggleApplyDone('${id}','${date}')" style="min-height:38px"
+           class="w-full mt-2 py-2 rounded-xl text-xs font-bold ${doc.applyDone?'bg-green-100 text-green-700':'bg-white border border-gray-300 text-gray-600'}">
+           ${doc.applyDone ? '✓ 어제 적은 적용을 지켰습니다' : '적용을 지켰으면 눌러주세요'}</button>`
+      : (kind === 'dqt' && doc.applyDone ? `<p class="text-xs text-green-700 font-bold mt-2">✓ 적용을 지켰습니다</p>` : '');
+    return head + img + memo + apply + noteBlock(kind, id, date);
   }
   const rows = DOC_FIELDS[kind].map(([f,lab]) => {
     if (!(doc[f]||'').trim()) return '';
-    if (kind === 'sermon' && ['title','passage','preacher'].includes(f))
-      return `<p class="text-sm text-gray-800"><span class="text-[11px] text-gray-400 mr-1">${lab}</span><b>${esc(doc[f])}</b></p>`;
     return `<div class="mb-2">
       <p class="text-[11px] text-gray-400 font-semibold mb-0.5">${lab}</p>
       <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3">${esc(doc[f])}</p>
@@ -1307,8 +1411,81 @@ function saveEditDoc(kind, id, date) {
   saveDoc(kind, id, date, data, '고쳤습니다');
 }
 
+// 손으로 쓴 것이 올라오는 피드. 낸 사람은 펼쳐서, 안 낸 사람은 아래에 이름만.
+function photoFeed(kind, date, heading, note) {
+  const people = state.students.concat(LEADERS.filter(l => l.id === MANAGER));
+  people.forEach(s => loadDoc(kind, s.id, date));
+  if (canManage()) people.forEach(s => loadNote(kind, s.id, date));
+
+  const done = [], waiting = [];
+  people.forEach(s => {
+    const raw = getDoc(kind, s.id, date);
+    if (raw === undefined) { waiting.push({ s, loading:true }); return; }
+    (hasContent(kind, raw) ? done : waiting).push({ s, doc: raw });
+  });
+  // 늦게 낸 것이 아래로 가도록 올린 시각 순으로 세운다.
+  done.sort((a,b) => String(a.doc.updatedAt||'').localeCompare(String(b.doc.updatedAt||'')));
+
+  const needFeedback = canManage()
+    ? done.filter(x => !hasLeaderNote(kind, x.s.id, date)).map(x => x.s.name) : [];
+
+  const cards = done.map(({ s, doc }) => {
+    const me = s.id === currentUser;
+    const editing = _editingDoc === kind + '_' + s.id;
+    const noFb = canManage() && !hasLeaderNote(kind, s.id, date);
+    return `<div class="card">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-sm font-bold text-gray-900 truncate">${s.name}${me?' <span class="text-xs font-normal text-gray-400">(나)</span>':''}</span>
+          ${s.role ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">${s.role}</span>` : ''}
+          ${s.title ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">${s.title.split(' / ').pop()}</span>` : ''}
+          ${doc.late ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">늦음</span>' : ''}
+          ${noFb ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-bold">피드백 필요</span>' : ''}
+        </div>
+        <span class="text-[11px] text-gray-400 flex-shrink-0">${doc.updatedAt ? new Date(doc.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</span>
+      </div>
+      ${editing ? docEditForm(kind, s.id, date) : docView(kind, doc, s.id, date)}
+      ${!editing && canManage() ? (_delArm === kind + '_' + s.id ? `
+        <div class="flex items-center gap-2 mt-2">
+          <span class="text-xs text-red-600 font-semibold flex-1">${s.name} ${KINDS[kind].label}을 지울까요?</span>
+          <button onclick="doDelete('${kind}','${s.id}','${date}')" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-bold bg-red-600 text-white">지웁니다</button>
+          <button onclick="cancelDelete()" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-gray-100 text-gray-600">그만</button>
+        </div>` : `
+        <div class="flex gap-2 mt-2">
+          <button onclick="_editingDoc='${kind}_${s.id}';_delArm=null;renderAll()" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-white border text-gray-600">메모 고치기</button>
+          <button onclick="armDelete('${kind}','${s.id}')" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-white border text-red-500">지우기</button>
+        </div>`) : ''}
+      ${doc.editedBy ? `<p class="text-[11px] text-gray-400 mt-1">${esc(doc.editedBy)} 목사님이 손댄 기록이 있어요</p>` : ''}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="card !py-3">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-gray-800 text-sm">${heading}</h3>
+        <span class="text-xs font-bold ${done.length?'text-blue-600':'text-gray-300'}">${done.length}명 올림</span>
+      </div>
+      ${note ? `<p class="text-[11px] text-gray-400 mt-0.5">${note}</p>` : ''}
+      ${needFeedback.length ? `<p class="text-[11px] text-red-600 font-semibold mt-1.5">피드백이 아직 없는 아이 — ${needFeedback.join(' · ')}</p>` : ''}
+    </div>
+    ${cards || `<div class="card text-center py-8">
+      <p class="text-2xl">📷</p>
+      <p class="text-sm text-gray-500 mt-2 font-semibold">아직 올라온 것이 없어요</p>
+      <p class="text-xs text-gray-400 mt-1">첫 번째로 올려보세요</p>
+    </div>`}
+    ${waiting.length ? `<div class="card !py-3">
+      <p class="text-[11px] text-gray-400 mb-1.5">아직 안 낸 사람</p>
+      <div class="flex flex-wrap gap-1">
+        ${waiting.map(({s, loading}) => `<span class="text-[11px] px-2 py-1 rounded-full font-semibold ${loading?'bg-gray-50 text-gray-300':'bg-gray-100 text-gray-500'}">${s.name}</span>`).join('')}
+      </div>
+    </div>` : ''}`;
+}
+
 // 그날 반 전체가 낸 것 — 서로 보고 배우라고 열어 둔다(기도 영적일지만 빼고).
+// D형 큐티와 설교 노트는 손으로 쓴 사진이라 접지 않고 피드처럼 펼쳐 보여준다.
 function peopleList(kind, date, heading, note) {
+  const feed = (kind === 'dqt' || kind === 'sermon');
+  if (feed) return photoFeed(kind, date, heading, note);
   const people = state.students.concat(LEADERS.filter(l => l.id === MANAGER));
   const rows = people.map(s => {
     loadDoc(kind, s.id, date);
@@ -1434,7 +1611,21 @@ function renderQT() {
   const loading = saved === undefined;
   const open = canWrite(qtDate);
 
+  const material = `
+    <div class="card !py-3">
+      <h3 class="font-bold text-gray-800 text-sm mb-2">9·10월 큐티 자료</h3>
+      <div class="flex gap-2">
+        ${Object.keys(QT_PDF).map(ym => `
+          <a href="./files/${ym}/youth-qt-${ym}.pdf" target="_blank" rel="noopener"
+             class="flex-1 text-center bg-gray-50 border rounded-xl py-2.5 text-sm font-semibold text-gray-700">
+            📕 ${QT_PDF[ym]}</a>`).join('')}
+        <button onclick="printQtCalendar()" class="flex-1 bg-gray-50 border rounded-xl py-2.5 text-sm font-semibold text-gray-700">🗓️ 진도표</button>
+      </div>
+      <p class="text-[11px] text-gray-400 mt-1.5">매일성경 한 달치 PDF (20MB 남짓) · 진도표 달력은 A4 두 장으로 인쇄됩니다</p>
+    </div>`;
+
   el.innerHTML = `
+    ${material}
     ${calendar}
     <div class="card !py-3 text-center">
       <p class="text-xs text-gray-500">${n+1}주차 · ${dayLabel(qtDate)}</p>
@@ -1480,18 +1671,7 @@ function renderQT() {
     </div>
 
     ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 그날 올린 묵상을 볼 수 있어요')}
-
-    <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-2">9·10월 큐티 자료</h3>
-      <div class="flex gap-2">
-        ${Object.keys(QT_PDF).map(ym => `
-          <a href="./files/${ym}/youth-qt-${ym}.pdf" target="_blank" rel="noopener"
-             class="flex-1 text-center bg-gray-50 border rounded-xl py-3 text-sm font-semibold text-gray-700">
-            📕 ${QT_PDF[ym]} 매일성경</a>`).join('')}
-      </div>
-      <button onclick="printQtCalendar()" class="w-full mt-2 bg-white border rounded-xl py-3 text-sm font-semibold text-gray-700">🗓️ 9·10월 진도표 달력 인쇄 · PDF로 저장</button>
-      <p class="text-[11px] text-gray-400 mt-2">한 달치를 통째로 받아 인쇄할 수 있어요 (20MB 남짓) · 진도표 달력은 A4 두 장입니다</p>
-    </div>`;
+`;
 }
 
 // ==========================================
@@ -1538,16 +1718,17 @@ function renderDQT() {
   const loading = saved === undefined;
   const open = canWrite(dqtDate);
 
-  // 어제 적은 적용을 오늘 체크한다 — 적어만 두고 흘려보내지 않도록.
+  // 어제 공책에 적은 적용을 오늘 지켰는지 — 적어만 두고 흘려보내지 않도록.
   const yst = iso(addDays(today0(), -1));
   let checkup = '';
   if (slotOf(yst)) {
     loadDoc('dqt', me, yst);
     const y = getDoc('dqt', me, yst);
-    if (y && (y.apply||'').trim()) {
+    if (y && hasContent('dqt', y)) {
       checkup = `<div class="card ${y.applyDone?'bg-green-50 border border-green-200':'bg-amber-50 border border-amber-200'}">
-        <p class="text-[11px] font-bold ${y.applyDone?'text-green-700':'text-amber-700'} mb-1">어제 적용 체크업 · ${dayLabel(yst)}</p>
-        <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">${esc(y.apply)}</p>
+        <p class="text-[11px] font-bold ${y.applyDone?'text-green-700':'text-amber-700'}">어제 적용 체크업 · ${dayLabel(yst)}</p>
+        <p class="text-xs text-gray-700 mt-1">어제 공책에 적은 <b>적용</b>, 오늘 지켰나요?</p>
+        ${y.image ? `<img src="${y.image}" onclick="showImg(this.src)" class="w-full rounded-xl border mt-2 cursor-pointer" style="max-height:160px;object-fit:cover;background:#F9FAFB">` : ''}
         <button onclick="toggleApplyDone('${me}','${yst}')"
           class="w-full mt-2 py-2.5 rounded-xl text-sm font-bold ${y.applyDone?'bg-green-600 text-white':'bg-white border border-amber-300 text-amber-800'}">
           ${y.applyDone ? '✓ 지켰습니다' : '지켰으면 눌러주세요'}
@@ -1556,22 +1737,58 @@ function renderDQT() {
     }
   }
 
-  const form = DOC_FIELDS.dqt.map(([f,lab,rows]) => {
-    const [bd, bg] = DQT_STYLE[f];
-    const ph = { obs:'본문에 있는 사실을 내 말로 바꿔 적어보세요. 누가, 언제, 어디서, 무엇을, 어떻게.',
-                 int:'왜 이렇게 하셨을까? 이 본문의 하나님은 어떤 분이신가? 질문을 걸어보세요.',
-                 feel:'지금 내 상황과 연결해서, 무엇이 왜 마음에 남았는지 적어보세요.',
-                 apply:'내일 체크할 수 있는 한 가지. 언제·어디서·누구에게·무엇을.' }[f];
-    return `<div class="mt-3">
-      <div class="flex items-center gap-2 mb-1">
-        <span class="step-badge ${bg}">${lab}</span>
-        ${f==='apply'?'<span class="text-[10px] text-gray-400">꼭 적어주세요</span>':''}
-      </div>
-      ${helpBlock(f)}
-      <textarea id="dqt-${f}" rows="${rows}" oninput="dset('dqt','${dqtDate}','${f}',this.value)"
-        placeholder="${ph}" class="w-full border rounded-xl p-3 text-sm resize-none ${bd}">${esc(dv('dqt', dqtDate, f, saved && saved[f]))}</textarea>
+  // 쓰는 법 — 공책을 펴 놓고 이걸 보면서 쓴다. 그래서 접지 않고 늘 펼쳐 둔다.
+  const guide = `
+    <div class="card">
+      <h3 class="font-bold text-gray-800 text-sm">D형 큐티, 이렇게 씁니다</h3>
+      <p class="text-[11px] text-gray-400 mt-0.5 mb-2">공책에 <b>손으로</b> 네 단계를 적고, 다 쓰면 사진을 찍어 올립니다.</p>
+      ${['obs','int','feel','apply'].map(f => {
+        const [lab, lead, items] = DQT_HELP[f];
+        const [bd, bg] = DQT_STYLE[f];
+        return `<div class="${bd} bg-gray-50 rounded-r-xl px-3 py-2.5 mb-2">
+          <span class="step-badge ${bg}">${lab}</span>
+          <p class="text-xs text-gray-800 leading-relaxed mt-1 font-semibold">${lead}</p>
+          <ul class="mt-1 space-y-0.5">${items.map(x => `<li class="text-xs text-gray-600 leading-relaxed">· ${x}</li>`).join('')}</ul>
+        </div>`;
+      }).join('')}
     </div>`;
-  }).join('');
+
+  const shown = _pendingImg || (saved && saved.image) || '';
+  const form = `
+    <div class="card">
+      <h3 class="font-bold text-gray-800 text-sm mb-1">${dayLabel(dqtDate)} 내 D형 큐티</h3>
+      ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
+      : !open ? `
+        ${hasContent('dqt', saved) ? `${docView('dqt', saved, me, dqtDate)}
+          <p class="text-[11px] text-gray-400 mt-2 text-center">🔒 지난 날이라 새로 올릴 수 없어요</p>`
+          : lockNote(dqtDate, 'D형 큐티')}`
+      : `
+      ${shown ? `
+      <div class="relative mt-1">
+        <img src="${shown}" onclick="showImg(this.src)" class="w-full rounded-xl border cursor-pointer" style="max-height:420px;object-fit:contain;background:#F9FAFB">
+        <div class="absolute top-2 right-2 flex gap-1.5">
+          <button onclick="rotateImage('dqt','${dqtDate}')" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">↻ 돌리기</button>
+          <button onclick="clearImage()" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">사진 빼기</button>
+        </div>
+        ${_pendingImg ? `<p class="text-[11px] text-amber-600 mt-1">아직 안 올렸어요 — 아래 버튼을 눌러야 저장됩니다</p>` : ''}
+      </div>` : ''}
+      <label class="mt-3 flex flex-col items-center justify-center gap-1 border-2 border-dashed border-gray-300 rounded-xl py-6 cursor-pointer active:bg-gray-50">
+        <span class="text-2xl">📷</span>
+        <span class="text-sm font-bold text-gray-700">${shown ? '사진 바꾸기' : '공책 사진 올리기'}</span>
+        <span class="text-[11px] text-gray-400">두 면이면 나란히 놓고 한 장으로 찍어주세요</span>
+        <input type="file" accept="image/*" class="hidden" onchange="pickImage(this)">
+      </label>
+      <textarea id="dqt-memo" rows="2" oninput="dset('dqt','${dqtDate}','memo',this.value)"
+        placeholder="한 줄 메모 — 안 써도 됩니다"
+        class="w-full border rounded-xl p-3 text-sm resize-none mt-3">${esc(dv('dqt', dqtDate, 'memo', saved && saved.memo))}</textarea>
+      <button onclick="submitDqt('${dqtDate}')"
+        class="w-full mt-3 py-4 rounded-xl font-bold text-sm ${hasContent('dqt',saved) ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'}">
+        ${hasContent('dqt',saved) ? '사진 다시 올리기' : 'D형 큐티 올리기'}
+      </button>
+      ${lockNote(dqtDate, 'D형 큐티')}
+      ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}
+      ${hasContent('dqt', saved) ? noteBlock('dqt', me, dqtDate) : ''}`}
+    </div>`;
 
   el.innerHTML = `
     ${dayStrip('dqt', dqtDate)}
@@ -1581,26 +1798,12 @@ function renderDQT() {
       <p class="text-base font-bold text-gray-900 mt-0.5">${esc(ref || '진도표에 없는 날')}</p>
       <p class="text-[11px] text-gray-400 mt-1">본문 지면은 <button onclick="setDate('qt','${dqtDate}');navigate('qt')" style="min-height:unset" class="underline font-semibold text-gray-600">큐티 화면</button>에서 볼 수 있어요</p>
     </div>
-    <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm">D형 큐티 — 네 단계</h3>
-      <p class="text-[11px] text-gray-400 mt-0.5">관찰 → 해석 → 느낀점 → 적용. 순서대로 내려가며 적습니다.</p>
-      ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
-      : !open ? `
-        ${hasContent('dqt', saved) ? `<div class="mt-3">${docView('dqt', saved, me, dqtDate)}</div>
-          <p class="text-[11px] text-gray-400 mt-2 text-center">🔒 지난 날이라 고칠 수 없어요</p>`
-          : lockNote(dqtDate, 'D형 큐티')}`
-      : `${form}
-      <button onclick="submitDqt('${dqtDate}')"
-        class="w-full mt-4 py-4 rounded-xl font-bold text-sm ${hasContent('dqt',saved) ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'}">
-        ${hasContent('dqt',saved) ? '고쳐서 다시 올리기' : 'D형 큐티 제출'}
-      </button>
-      ${lockNote(dqtDate, 'D형 큐티')}
-      ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}`}
-    </div>
+    ${form}
+    ${guide}
     <div class="card !py-3 text-center">
       <p class="text-sm ${cntOf('dqt',me,n)>=5?'text-purple-600 font-bold':'text-gray-600'}">이번 주 D형 ${cntOf('dqt',me,n)}일 / 7일</p>
     </div>
-    ${peopleList('dqt', dqtDate, `${dayLabel(dqtDate)} 친구들 D형 큐티`, '서로 어떻게 관찰하고 해석했는지 보고 배웁니다')}`;
+    ${peopleList('dqt', dqtDate, `${dayLabel(dqtDate)} 반 전체 D형 큐티`, '손으로 쓴 것을 서로 보고 배웁니다 · 비밀 댓글은 본인과 목사님만 봅니다')}`;
 }
 
 // ==========================================
@@ -1760,6 +1963,7 @@ function renderSermon() {
   const saved = getDoc('sermon', me, sermonDate);
   const loading = saved === undefined;
   const open = canWriteSermon(sermonDate);
+  const shown = _pendingImg || (saved && saved.image) || '';
 
   const chips = `<div class="card !py-2">
     <div class="scroll-table"><div class="flex gap-1.5 pb-1">
@@ -1771,51 +1975,218 @@ function renderSermon() {
           ${fmt(parseDate(ds))}${done?' ✓':''}</button>`;
       }).join('')}
     </div></div>
-    <p class="text-[11px] text-gray-400 mt-1 text-center">주일 날짜를 고르세요 · 그 주 금요일까지 쓸 수 있어요</p>
+    <p class="text-[11px] text-gray-400 mt-1 text-center">주일 날짜를 고르세요 · 그 주 금요일까지 올릴 수 있어요</p>
   </div>`;
-
-  const form = DOC_FIELDS.sermon.map(([f,lab,rows]) => {
-    const short = ['title','passage','preacher'].includes(f);
-    const ph = { title:'예) 두려워하지 말라', passage:'예) 사사기 6:11-24', preacher:'예) 담임 목사님',
-                 summary:'설교의 흐름을 내 말로 정리해 봅니다. 대지·핵심 문장·예화.',
-                 grace:'가장 마음에 남은 한 마디와, 왜 그랬는지.',
-                 apply:'이번 주에 어떻게 살아낼지 한 가지.' }[f];
-    return `<div class="mt-3">
-      <p class="text-[11px] text-gray-500 font-bold mb-1">${lab}</p>
-      ${short
-        ? `<input type="text" id="sm-${f}" oninput="dset('sermon','${sermonDate}','${f}',this.value)"
-             placeholder="${ph}" value="${esc(dv('sermon', sermonDate, f, saved && saved[f]))}" class="w-full border rounded-xl p-3 text-sm">`
-        : `<textarea id="sm-${f}" rows="${rows}" oninput="dset('sermon','${sermonDate}','${f}',this.value)"
-             placeholder="${ph}" class="w-full border rounded-xl p-3 text-sm resize-none">${esc(dv('sermon', sermonDate, f, saved && saved[f]))}</textarea>`}
-    </div>`;
-  }).join('');
 
   el.innerHTML = `
     ${chips}
     <div class="card !py-3 text-center">
       <p class="text-xs text-gray-500">${n+1}주차 주일</p>
       <p class="text-base font-bold text-gray-900 mt-0.5">${dayLabel(sermonDate)} 설교 노트</p>
+      <p class="text-[11px] text-gray-400 mt-1">예배 때 손으로 적고, 집에 와서 사진으로 올립니다</p>
     </div>
     <div class="card">
+      <h3 class="font-bold text-gray-800 text-sm mb-1">내 설교 노트</h3>
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
         ${hasContent('sermon', saved) ? `${docView('sermon', saved, me, sermonDate)}
-          <p class="text-[11px] text-gray-400 mt-2 text-center">🔒 지난 주일이라 고칠 수 없어요</p>`
+          <p class="text-[11px] text-gray-400 mt-2 text-center">🔒 지난 주일이라 새로 올릴 수 없어요</p>`
           : `<div class="text-center py-6">
               <p class="text-2xl">🔒</p>
               <p class="text-sm text-gray-500 mt-1 font-semibold">${parseDate(sermonDate) > today0() ? '아직 오지 않은 주일이에요' : '이 주일 노트는 닫혔어요'}</p>
-              <p class="text-xs text-gray-400 mt-1">설교 노트는 <b>주일부터 그 주 금요일까지</b> 쓸 수 있어요.</p>
+              <p class="text-xs text-gray-400 mt-1">설교 노트는 <b>주일부터 그 주 금요일까지</b> 올릴 수 있어요.</p>
             </div>`}`
-      : `${form}
-      ${imageBox('sermon', sermonDate, saved)}
+      : `
+      ${shown ? `
+      <div class="relative mt-1">
+        <img src="${shown}" onclick="showImg(this.src)" class="w-full rounded-xl border cursor-pointer" style="max-height:420px;object-fit:contain;background:#F9FAFB">
+        <div class="absolute top-2 right-2 flex gap-1.5">
+          <button onclick="rotateImage('sermon','${sermonDate}')" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">↻ 돌리기</button>
+          <button onclick="clearImage()" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">사진 빼기</button>
+        </div>
+        ${_pendingImg ? `<p class="text-[11px] text-amber-600 mt-1">아직 안 올렸어요 — 아래 버튼을 눌러야 저장됩니다</p>` : ''}
+      </div>` : ''}
+      <label class="mt-3 flex flex-col items-center justify-center gap-1 border-2 border-dashed border-gray-300 rounded-xl py-6 cursor-pointer active:bg-gray-50">
+        <span class="text-2xl">📷</span>
+        <span class="text-sm font-bold text-gray-700">${shown ? '사진 바꾸기' : '설교 노트 사진 올리기'}</span>
+        <span class="text-[11px] text-gray-400">두 면이면 나란히 놓고 한 장으로 찍어주세요</span>
+        <input type="file" accept="image/*" class="hidden" onchange="pickImage(this)">
+      </label>
+      <div class="flex gap-2 mt-3">
+        <input type="text" id="sm-title" oninput="dset('sermon','${sermonDate}','title',this.value)"
+          placeholder="설교 제목(선택)" value="${esc(dv('sermon', sermonDate, 'title', saved && saved.title))}" class="flex-1 border rounded-xl p-3 text-sm">
+        <input type="text" id="sm-passage" oninput="dset('sermon','${sermonDate}','passage',this.value)"
+          placeholder="본문(선택)" value="${esc(dv('sermon', sermonDate, 'passage', saved && saved.passage))}" class="flex-1 border rounded-xl p-3 text-sm">
+      </div>
+      <textarea id="sm-memo" rows="2" oninput="dset('sermon','${sermonDate}','memo',this.value)"
+        placeholder="한 줄 메모 — 안 써도 됩니다"
+        class="w-full border rounded-xl p-3 text-sm resize-none mt-2">${esc(dv('sermon', sermonDate, 'memo', saved && saved.memo))}</textarea>
       <button onclick="submitSermon('${sermonDate}')"
         class="w-full mt-3 py-4 rounded-xl font-bold text-sm ${hasContent('sermon',saved) ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'}">
-        ${hasContent('sermon',saved) ? '고쳐서 다시 올리기' : '설교 노트 제출'}
+        ${hasContent('sermon',saved) ? '사진 다시 올리기' : '설교 노트 올리기'}
       </button>
-      <p class="text-[11px] text-gray-400 mt-2 text-center">손으로 쓴 노트를 사진으로 올려도 됩니다</p>
-      ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-1 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}`}
+      ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}
+      ${hasContent('sermon', saved) ? noteBlock('sermon', me, sermonDate) : ''}`}
     </div>
-    ${peopleList('sermon', sermonDate, `${fmt(parseDate(sermonDate))} 주일 친구들 노트`, '같은 설교를 어떻게 들었는지 나눕니다')}`;
+    ${peopleList('sermon', sermonDate, `${fmt(parseDate(sermonDate))} 주일 반 전체 노트`, '같은 설교를 어떻게 들었는지 서로 봅니다 · 비밀 댓글은 본인과 목사님만 봅니다')}`;
+}
+
+// ==========================================
+// 생일 — 생년월일·연락처는 코드에 없다. 서버(state.profiles)에서 받아 온다.
+// ==========================================
+function profileOf(id) { return (state.profiles || {})[id] || {}; }
+function birthOf(id)   { return profileOf(id).birth || ''; }   // 'YYYY-MM-DD'
+function phoneOf(id)   { return profileOf(id).phone || ''; }
+function birthLabel(id) {
+  const b = birthOf(id); if (!b) return '';
+  return `${Number(b.slice(5,7))}월 ${Number(b.slice(8,10))}일`;
+}
+// 그 생일에 몇 살이 되는지(만 나이)
+function turningAge(id, when) {
+  const b = birthOf(id); if (!b) return 0;
+  return when.getFullYear() - Number(b.slice(0,4));
+}
+function nextBirthday(id) {
+  const b = birthOf(id); if (!b) return null;
+  const t = today0(), m = Number(b.slice(5,7)), d = Number(b.slice(8,10));
+  let x = new Date(t.getFullYear(), m-1, d);
+  if (x < t) x = new Date(t.getFullYear()+1, m-1, d);
+  return { date: x, days: Math.round((x - t) / 86400000) };
+}
+function bdayPeople() { return state.students.concat(LEADERS).filter(u => birthOf(u.id)); }
+function upcomingBirthdays() {
+  return bdayPeople().map(u => Object.assign({}, u, nextBirthday(u.id)))
+    .sort((a,b) => a.days - b.days);
+}
+function todaysBirthdays() { return upcomingBirthdays().filter(u => u.days === 0); }
+// 축하 글은 생일 앞뒤 이레 동안 열어 둔다.
+function bdayOpen(id) {
+  const n = nextBirthday(id); if (!n) return false;
+  return n.days <= 7 || n.days >= 358;
+}
+function bdayYear(id) {
+  const n = nextBirthday(id);
+  return n ? String(n.date.getFullYear() - (n.days >= 358 ? 1 : 0)) : String(today0().getFullYear());
+}
+function addBdayMsg(id) {
+  const ta = document.getElementById('bday-msg-' + id);
+  const text = (ta ? ta.value : '').trim();
+  if (!text) { toast('축하 한마디를 적어주세요'); return; }
+  const year = bdayYear(id);
+  const prev = getDoc('bday', id, year) || {};
+  const msgs = (Array.isArray(prev.msgs) ? prev.msgs : []).concat([{
+    by: currentUser, name: (findUser(currentUser)||{}).name || '', text, at: new Date().toISOString()
+  }]);
+  saveDoc('bday', id, year, { msgs, year }, '축하를 남겼어요!');
+}
+// 목사님만 지운다 — 장난 글이 남지 않도록.
+function removeBdayMsg(id, idx) {
+  if (!canManage()) return;
+  const year = bdayYear(id);
+  const prev = getDoc('bday', id, year) || {};
+  const msgs = (Array.isArray(prev.msgs) ? prev.msgs : []).slice();
+  msgs.splice(idx, 1);
+  saveDoc('bday', id, year, { msgs, year }, '지웠습니다');
+}
+
+function bdayCard(u, big) {
+  const year = bdayYear(u.id);
+  loadDoc('bday', u.id, year);
+  const doc = getDoc('bday', u.id, year);
+  const msgs = doc && Array.isArray(doc.msgs) ? doc.msgs : [];
+  const n = nextBirthday(u.id);
+  const age = turningAge(u.id, n.date);
+  const open = bdayOpen(u.id);
+  return `<div class="card ${big ? 'bg-gradient-to-b from-amber-50 to-white border border-amber-200' : ''}">
+    <div class="flex items-center gap-3">
+      <div class="text-3xl">🎂</div>
+      <div class="min-w-0 flex-1">
+        <p class="text-base font-bold text-gray-900">${u.name}<span class="text-xs font-normal text-gray-500 ml-1">${u.role || (u.title ? '인도자' : '')}</span></p>
+        <p class="text-xs text-gray-600 mt-0.5">${birthLabel(u.id)} · 만 ${age}세${n.days === 0 ? ' · <b class="text-amber-700">오늘입니다</b>' : ` · D-${n.days}`}</p>
+      </div>
+    </div>
+    ${msgs.length ? `<div class="mt-3 space-y-1.5">
+      ${msgs.map((m, k) => `<div class="bg-gray-50 rounded-xl px-3 py-2">
+        <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">${esc(m.text)}</p>
+        <div class="flex items-center justify-between mt-1">
+          <p class="text-[11px] text-gray-400">${esc(m.name)}</p>
+          ${canManage() ? `<button onclick="removeBdayMsg('${u.id}',${k})" style="min-height:24px" class="text-[11px] text-red-400 px-1">지우기</button>` : ''}
+        </div>
+      </div>`).join('')}
+    </div>` : (open ? `<p class="text-xs text-gray-400 mt-3">아직 축하 글이 없어요. 처음으로 남겨보세요!</p>` : '')}
+    ${open ? `
+      <textarea id="bday-msg-${u.id}" rows="2" placeholder="${u.name}에게 축하 한마디"
+        class="w-full border rounded-xl p-3 text-sm resize-none mt-3"></textarea>
+      <button onclick="addBdayMsg('${u.id}')" class="w-full mt-2 py-3 rounded-xl bg-gray-900 text-white font-bold text-sm">축하 남기기</button>`
+    : ''}
+  </div>`;
+}
+
+function renderBday() {
+  const el = document.getElementById('page-bday');
+  const list = bdayPeople();
+  if (!list.length) {
+    el.innerHTML = `<div class="card text-center py-10">
+      <p class="text-3xl">🎂</p>
+      <p class="text-sm text-gray-500 mt-2 font-semibold">아직 생일이 등록되지 않았어요</p>
+      <p class="text-xs text-gray-400 mt-1">목사님께 말씀드리면 넣어주십니다</p>
+    </div>`;
+    return;
+  }
+  const today = todaysBirthdays();
+  const soon = upcomingBirthdays().filter(u => u.days > 0).slice(0, 3);
+
+  // 달별로 늘어놓는다 — 한 해 전체를 한눈에.
+  const byMonth = {};
+  list.forEach(u => {
+    const m = Number(birthOf(u.id).slice(5,7));
+    (byMonth[m] = byMonth[m] || []).push(u);
+  });
+  const thisMonth = today0().getMonth() + 1;
+  const months = Object.keys(byMonth).map(Number).sort((a,b) => a-b).map(m => `
+    <div class="flex gap-3 py-2 border-b last:border-0">
+      <span class="text-xs font-bold ${m===thisMonth?'text-amber-600':'text-gray-400'} w-9 flex-shrink-0 mt-0.5">${m}월</span>
+      <div class="min-w-0 flex-1 space-y-1">
+        ${byMonth[m].sort((a,b) => birthOf(a.id).slice(5) < birthOf(b.id).slice(5) ? -1 : 1).map(u => `
+          <div class="flex items-baseline gap-2">
+            <span class="text-sm font-semibold text-gray-800">${u.name}</span>
+            <span class="text-xs text-gray-500">${birthLabel(u.id)}</span>
+            <span class="text-[11px] text-gray-400">${birthOf(u.id).slice(0,4)}년생</span>
+            ${isLeader() && phoneOf(u.id) ? `<a href="tel:${phoneOf(u.id).replace(/-/g,'')}" class="text-[11px] text-blue-600 ml-auto">${esc(phoneOf(u.id))}</a>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    ${today.length ? `
+      <div class="card bg-gray-900 text-center">
+        <p class="text-3xl">🎉</p>
+        <p class="text-white font-bold text-lg mt-1">오늘은 ${today.map(u=>u.name).join(' · ')} 생일!</p>
+        <p class="text-white/60 text-xs mt-1">한 사람이 태어난 날은 하나님이 이 반에 그 사람을 주신 날입니다</p>
+      </div>
+      ${today.map(u => bdayCard(u, true)).join('')}
+    ` : ''}
+
+    ${soon.length ? `
+    <div class="card">
+      <h3 class="font-bold text-gray-800 text-sm mb-2">다가오는 생일</h3>
+      ${soon.map(u => `
+        <div class="flex items-center justify-between py-2 border-b last:border-0">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-gray-800">${u.name}${u.role?` <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">${u.role}</span>`:''}</p>
+            <p class="text-[11px] text-gray-500 mt-0.5">${birthLabel(u.id)} · 만 ${turningAge(u.id, u.date)}세가 됩니다</p>
+          </div>
+          <span class="text-xs font-bold ${u.days<=7?'text-amber-600':'text-gray-400'} flex-shrink-0">D-${u.days}</span>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${upcomingBirthdays().filter(u => u.days > 0 && u.days <= 7).map(u => bdayCard(u, false)).join('')}
+
+    <div class="card">
+      <h3 class="font-bold text-gray-800 text-sm mb-1">우리 반 생일</h3>
+      <p class="text-[11px] text-gray-400 mb-2">${isLeader() ? '연락처는 목사님 화면에만 보입니다' : '생일 앞뒤 이레 동안 축하 글을 남길 수 있어요'}</p>
+      ${months}
+    </div>`;
 }
 
 // ==========================================
@@ -1921,7 +2292,8 @@ function renderGuide() {
 
     <div class="card">
       <h3 class="font-bold text-gray-900 text-sm mb-1">D형 큐티 — 네 단계로 파고듭니다</h3>
-      <p class="text-[11px] text-gray-500 mb-2">관찰 → 해석 → 느낀점 → 적용. 순서를 지키는 것이 핵심입니다.</p>
+      <p class="text-[11px] text-gray-500 mb-2">관찰 → 해석 → 느낀점 → 적용. 순서를 지키는 것이 핵심입니다.<br>
+      <b>공책에 손으로 적고</b>, 다 쓰면 사진을 찍어 올립니다.</p>
       ${['obs','int','feel','apply'].map(f => {
         const [lab, lead, items] = DQT_HELP[f];
         const [bd, bg] = DQT_STYLE[f];
@@ -1958,7 +2330,7 @@ function renderGuide() {
       <h3 class="font-bold text-gray-900 text-sm mb-2">체크표는 이렇게 채워집니다</h3>
       <ul class="space-y-1.5 text-sm text-gray-700">
         <li class="flex gap-2 items-start"><span class="st-출석 px-2 rounded text-xs mt-0.5">토요일</span><span class="text-xs leading-relaxed">출석 · 지각 · 무단지각 · 결석 · 무단결석 — 인도자가 모임에서 체크합니다</span></li>
-        <li class="flex gap-2 items-start"><span class="gate-O px-2 rounded text-xs mt-0.5">설교</span><span class="text-xs leading-relaxed">주일 설교 노트를 내면 자동으로 O가 됩니다</span></li>
+        <li class="flex gap-2 items-start"><span class="gate-O px-2 rounded text-xs mt-0.5">설교</span><span class="text-xs leading-relaxed">손으로 쓴 주일 설교 노트를 사진으로 올리면 자동으로 O가 됩니다</span></li>
         <li class="flex gap-2 items-start"><span class="st-출석 px-2 rounded text-xs mt-0.5">큐티</span><span class="text-xs leading-relaxed">큐티를 올린 날 칸이 켜집니다 (주 7일)</span></li>
         <li class="flex gap-2 items-start"><span class="b-int px-2 rounded text-xs mt-0.5 step-badge">D형</span><span class="text-xs leading-relaxed">D형 큐티를 낸 날 칸이 켜집니다 (주 7일)</span></li>
         <li class="flex gap-2 items-start"><span class="b-app px-2 rounded text-xs mt-0.5 step-badge">기도</span><span class="text-xs leading-relaxed">기도 영적일지를 낸 날 칸이 켜집니다 (주 7일)</span></li>
