@@ -80,6 +80,18 @@
   .b-feel { background:#FEF3C7; color:#B45309; }
   .b-app  { background:#D1FAE5; color:#047857; }
 
+  /* 목사님이 남기는 한마디 — 홈에서 사진 바로 아래 놓인다 */
+  .notice-card {
+    background:#0E0E13; border-radius:16px; padding:18px 18px 16px;
+    box-shadow:0 8px 24px -12px rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.07);
+    border-left:3px solid rgba(255,255,255,.55);
+  }
+  .notice-text {
+    color:#fff; font-size:16px; line-height:1.7; font-weight:600;
+    letter-spacing:-.01em; word-break:keep-all;
+  }
+
   .timer-num { font-variant-numeric: tabular-nums; font-size:44px; font-weight:800; letter-spacing:-.02em; }
 </style>
 </head>
@@ -240,7 +252,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.24';
+const APP_BUILD = '2026-09-05.25';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1234,25 +1246,32 @@ function noticeCard() {
   const nt = state.notice || {};
   const text = (nt.text || '').trim();
   if (!canManage() && !text) return '';
+
+  const label = `<div class="flex items-center gap-2 mb-2">
+      <span class="h-px w-5" style="background:rgba(255,255,255,.35)"></span>
+      <span class="text-[10px] font-bold tracking-[.22em] text-white/45">목사님 한마디</span>
+    </div>`;
+
   if (canManage() && _editNotice) {
-    return `<div class="card bg-gray-900">
-      <p class="text-[11px] font-bold text-white/50 mb-1.5">아이들에게 걸어 둘 한 줄</p>
-      <input type="text" id="notice-input" maxlength="80" value="${esc(nt.text || '')}"
-        placeholder="오늘 아이들에게 해주고 싶은 한마디"
-        onkeydown="if(event.key==='Enter') saveNotice()"
-        class="w-full rounded-xl p-3 text-sm" style="background:#1C1C22;color:#fff;border-color:#33333C">
+    return `<div class="notice-card">
+      ${label}
+      <textarea id="notice-input" rows="2" maxlength="90"
+        placeholder="여기에 한마디를 남기세요"
+        class="w-full rounded-xl p-3 text-[15px] leading-relaxed resize-none"
+        style="background:#17171D;color:#fff;border:1px solid #34343E">${esc(nt.text || '')}</textarea>
       <div class="flex gap-2 mt-2">
         <button onclick="saveNotice()" class="flex-1 py-2.5 rounded-xl bg-white text-gray-900 font-bold text-sm">걸기</button>
-        <button onclick="_editNotice=false;renderAll()" class="flex-1 py-2.5 rounded-xl font-bold text-sm" style="background:#2A2A32;color:#fff">취소</button>
+        <button onclick="_editNotice=false;renderAll()" class="flex-1 py-2.5 rounded-xl font-bold text-sm" style="background:#2A2A33;color:#fff">취소</button>
       </div>
     </div>`;
   }
-  return `<div class="card bg-gray-900 ${canManage() ? 'cursor-pointer active:opacity-80' : ''}"
+  return `<div class="notice-card ${canManage() ? 'cursor-pointer active:opacity-80' : ''}"
     ${canManage() ? 'onclick="_editNotice=true;renderAll()"' : ''}>
+    ${label}
     ${text
-      ? `<p class="text-white text-[15px] font-semibold leading-relaxed">${esc(text)}</p>
-         <p class="text-white/40 text-[11px] mt-2">${esc(nt.by || '')}${nt.at ? ' · ' + new Date(nt.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}) : ''}${canManage() ? ' · 눌러서 고치기' : ''}</p>`
-      : `<p class="text-white/40 text-sm">눌러서 아이들에게 한마디를 걸어두세요</p>`}
+      ? `<p class="notice-text">${esc(text)}</p>
+         <p class="text-white/35 text-[11px] mt-3">${esc(nt.by || '')}${nt.at ? ' · ' + new Date(nt.at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}) : ''}${canManage() ? ' · 눌러서 고치기' : ''}</p>`
+      : `<p class="text-white/35 text-[15px]">여기를 눌러 아이들에게 한마디를 남기세요</p>`}
   </div>`;
 }
 
@@ -1380,9 +1399,9 @@ function renderHome() {
     </div>`;
 
   el.innerHTML = `
-    ${noticeCard()}
     ${bdayHome}
     ${homeGallery}
+    ${noticeCard()}
     <div class="card">
       <div class="flex items-center justify-between">
         <div>
