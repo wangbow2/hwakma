@@ -240,7 +240,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.22';
+const APP_BUILD = '2026-09-05.23';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -919,31 +919,37 @@ function initGallery() {
     if (currentUser) renderAll();
   }, e => { _galleryLoaded = false; console.warn('갤러리 불러오기 실패:', e); });
 }
-function uploadGallery(input) {
-  const f = input.files && input.files[0];
+async function uploadGallery(input) {
+  const files = Array.from(input.files || []);
   input.value = '';
   if (_galleryUploading) { toast('사진을 올리고 있어요. 잠시만 기다려주세요'); return; }
-  if (!f || !_FS_OK || !currentUser) { if (!_FS_OK) toast('인터넷 연결을 확인해 주세요'); return; }
+  if (!files.length || !_FS_OK || !currentUser) { if (!_FS_OK) toast('인터넷 연결을 확인해 주세요'); return; }
   _galleryUploading = true;
-  toast('사진을 준비하는 중이에요…');
-  compressImage(f, image => {
-    if (!image) { _galleryUploading = false; toast('사진을 줄이지 못했어요. 다른 사진을 골라주세요'); return; }
-    if (_galleryUploads.some(x => x.image === image)) {
-      _galleryUploading = false;
-      toast('이미 올라온 사진이에요');
-      return;
-    }
-    const u = findUser(currentUser) || {};
-    const doc = { kind:'gallery', image, caption:val('gallery-caption'), studentId:currentUser,
-                  name:u.name || '', createdAt:new Date().toISOString(), deleted:false };
-    const id = `gallery_${Date.now()}_${currentUser}`;
-    _db.collection('discipleDocs').doc(id).set(doc).then(() => {
-      _galleryUploading = false;
+  toast(`${files.length}장 사진을 준비하는 중이에요…`);
+  const u = findUser(currentUser) || {};
+  const caption = val('gallery-caption');
+  const knownImages = new Set(_galleryUploads.map(x => x.image));
+  let uploaded = 0, skipped = 0, failed = 0;
+  for (let i = 0; i < files.length; i++) {
+    toast(`${files.length}장 중 ${i + 1}장 올리는 중…`);
+    const image = await new Promise(resolve => compressImage(files[i], resolve));
+    if (!image) { failed++; continue; }
+    if (knownImages.has(image)) { skipped++; continue; }
+    knownImages.add(image);
+    const doc = { kind:'gallery', image, caption, studentId:currentUser, name:u.name || '',
+                  createdAt:new Date(Date.now() + i).toISOString(), deleted:false };
+    const id = `gallery_${Date.now()}_${currentUser}_${i}_${Math.random().toString(36).slice(2,7)}`;
+    try {
+      await _db.collection('discipleDocs').doc(id).set(doc);
       _galleryUploads = _galleryUploads.filter(x => x.id !== id).concat(Object.assign({ id }, doc));
-      toast('갤러리에 올렸어요!');
-      renderAll();
-    }).catch(e => { _galleryUploading = false; console.warn('갤러리 저장 실패:', e); toast('사진을 저장하지 못했어요. 다시 눌러주세요'); });
-  });
+      uploaded++;
+    } catch (e) { failed++; console.warn('갤러리 저장 실패:', e); }
+  }
+  _galleryUploading = false;
+  renderAll();
+  if (uploaded) toast(`${uploaded}장 갤러리에 올렸어요${skipped ? ` · 중복 ${skipped}장 제외` : ''}${failed ? ` · 실패 ${failed}장` : ''}`);
+  else if (skipped && !failed) toast('선택한 사진은 이미 모두 올라와 있어요');
+  else toast('사진을 저장하지 못했어요. 다시 시도해 주세요');
 }
 function canManageGallery(item) { return !!item && (canManage() || item.studentId === currentUser); }
 function startGalleryEdit(id) { _galleryEditing = id; renderGallery(); }
@@ -991,8 +997,8 @@ function renderGallery() {
       <p class="text-xs text-gray-500 mt-1">우리 반의 함께한 순간을 누구나 올릴 수 있어요.</p>
       <input id="gallery-caption" type="text" maxlength="60" placeholder="사진 설명(선택)" class="mt-3">
       <label class="mt-2 flex items-center justify-center rounded-xl bg-gray-900 py-3 text-sm font-bold text-white cursor-pointer">
-        사진 올리기
-        <input type="file" accept="image/*" class="hidden" onchange="uploadGallery(this)">
+        사진 여러 장 올리기
+        <input type="file" accept="image/*" multiple class="hidden" onchange="uploadGallery(this)">
       </label>
     </div>
     <div class="grid grid-cols-2 gap-3">
