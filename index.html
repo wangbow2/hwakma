@@ -105,6 +105,7 @@
   </div>
   <div id="page-pray" class="page p-4 space-y-4"></div>
   <div id="page-sermon" class="page p-4 space-y-4"></div>
+  <div id="page-gallery" class="page p-4 space-y-4"></div>
   <div id="page-bday" class="page p-4 space-y-4"></div>
   <div id="page-check" class="page p-4 space-y-4"></div>
 </main>
@@ -126,6 +127,10 @@
     <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('sermon')" id="nav-sermon">
       <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 18V6a2 2 0 0 1 2-2h6v16H5a2 2 0 0 1-2-2z"/><path d="M21 18V6a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 0 2-2z"/></svg>
       <span class="text-xs mt-0.5 font-medium text-gray-500">설교노트</span>
+    </button>
+    <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('gallery')" id="nav-gallery">
+      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 5l1-2h6l1 2"/></svg>
+      <span class="text-xs mt-0.5 font-medium text-gray-500">갤러리</span>
     </button>
     <button class="nav-btn flex flex-col items-center py-1 px-2 hidden" onclick="navigate('check')" id="nav-check">
       <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -233,7 +238,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.14';
+const APP_BUILD = '2026-09-05.15';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -893,6 +898,84 @@ function showImg(src) {
 }
 
 // ==========================================
+// 갤러리 — 기본 사진 + 반원들이 올린 사진
+// ==========================================
+const GALLERY_DEFAULTS = [
+  { id:'default-1', image:'./gallery/2026-09-05-fellowship-1.jpg', caption:'함께한 첫 모임', name:'확~마! 제자반', createdAt:'2026-09-05T16:50:29+09:00' },
+  { id:'default-2', image:'./gallery/2026-09-05-fellowship-2.jpg', caption:'함께 먹고 나누는 시간', name:'확~마! 제자반', createdAt:'2026-09-05T16:50:38+09:00' },
+  { id:'default-3', image:'./gallery/2026-08-29-group.jpg', caption:'우리들의 시작', name:'확~마! 제자반', createdAt:'2026-08-29T18:59:39+09:00' }
+];
+let _galleryUploads = [], _galleryLoaded = false, _galleryTimer = null, _homeGalleryIndex = 0;
+function galleryItems() {
+  return GALLERY_DEFAULTS.concat(_galleryUploads).sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+}
+function initGallery() {
+  if (!_FS_OK || _galleryLoaded) return;
+  _galleryLoaded = true;
+  _db.collection('discipleDocs').where('kind','==','gallery').onSnapshot(snap => {
+    _galleryUploads = snap.docs.map(d => Object.assign({ id:d.id }, d.data())).filter(x => x.image && !x.deleted);
+    if (currentUser) renderAll();
+  }, e => { _galleryLoaded = false; console.warn('갤러리 불러오기 실패:', e); });
+}
+function uploadGallery(input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f || !_FS_OK || !currentUser) { if (!_FS_OK) toast('인터넷 연결을 확인해 주세요'); return; }
+  toast('사진을 준비하는 중이에요…');
+  compressImage(f, image => {
+    if (!image) { toast('사진을 줄이지 못했어요. 다른 사진을 골라주세요'); return; }
+    const u = findUser(currentUser) || {};
+    const doc = { kind:'gallery', image, caption:val('gallery-caption'), studentId:currentUser,
+                  name:u.name || '', createdAt:new Date().toISOString(), deleted:false };
+    const id = `gallery_${Date.now()}_${currentUser}`;
+    _db.collection('discipleDocs').doc(id).set(doc).then(() => {
+      _galleryUploads.push(Object.assign({ id }, doc));
+      toast('갤러리에 올렸어요!');
+      renderAll();
+    }).catch(e => { console.warn('갤러리 저장 실패:', e); toast('사진을 저장하지 못했어요. 다시 눌러주세요'); });
+  });
+}
+function paintHomeGallery() {
+  const img = document.getElementById('home-gallery-img');
+  if (!img) return;
+  const items = galleryItems();
+  if (!items.length) return;
+  _homeGalleryIndex = (_homeGalleryIndex + 1) % items.length;
+  img.style.opacity = '0';
+  setTimeout(() => {
+    if (!document.getElementById('home-gallery-img')) return;
+    img.src = items[_homeGalleryIndex].image;
+    img.alt = items[_homeGalleryIndex].caption || '제자반 갤러리 사진';
+    img.style.opacity = '1';
+    document.querySelectorAll('[data-gallery-dot]').forEach((d,i) => d.classList.toggle('bg-white', i === _homeGalleryIndex));
+  }, 180);
+}
+function startHomeGallery() {
+  clearInterval(_galleryTimer);
+  if (document.getElementById('home-gallery-img') && galleryItems().length > 1) _galleryTimer = setInterval(paintHomeGallery, 3000);
+}
+function renderGallery() {
+  const el = document.getElementById('page-gallery');
+  const items = galleryItems();
+  el.innerHTML = `
+    <div class="card">
+      <h2 class="text-base font-bold text-gray-900">확~마! 갤러리</h2>
+      <p class="text-xs text-gray-500 mt-1">우리 반의 함께한 순간을 누구나 올릴 수 있어요.</p>
+      <input id="gallery-caption" type="text" maxlength="60" placeholder="사진 설명(선택)" class="mt-3">
+      <label class="mt-2 flex items-center justify-center rounded-xl bg-gray-900 py-3 text-sm font-bold text-white cursor-pointer">
+        사진 올리기
+        <input type="file" accept="image/*" class="hidden" onchange="uploadGallery(this)">
+      </label>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      ${items.map(x => `<button onclick="showImg(this.querySelector('img').src)" class="overflow-hidden rounded-2xl bg-white text-left shadow-sm" style="min-height:unset">
+        <img src="${x.image}" alt="${esc(x.caption || '제자반 갤러리 사진')}" class="w-full aspect-square object-cover">
+        <div class="p-2"><p class="text-xs font-semibold text-gray-800 truncate">${esc(x.caption || '우리들의 순간')}</p><p class="text-[10px] text-gray-400 mt-0.5">${esc(x.name || '')}</p></div>
+      </button>`).join('')}
+    </div>`;
+}
+
+// ==========================================
 // 쓰다 만 글 지키기 · 날짜 이동
 // ==========================================
 function dv(kind, date, field, fallback) {
@@ -1082,7 +1165,7 @@ function renderAll() {
   document.getElementById('nav-check').classList.toggle('hidden', !canSeeCheck());
   document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
   ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
-     sermon: renderSermon, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
+     sermon: renderSermon, gallery: renderGallery, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
 }
 
 function todayRef() { return QT_SCHEDULE[iso(today0())] || ''; }
@@ -1105,6 +1188,15 @@ function renderHome() {
   const myPrayCount = inRange ? cntOf('pray',me,n) : 0;
   const myFriSermon = sermonOf(me, n, 'fri') === 'O';
   const mySunSermon = sermonOf(me, n, 'sun') === 'O';
+  const homePhotos = galleryItems();
+  _homeGalleryIndex = homePhotos.length ? _homeGalleryIndex % homePhotos.length : 0;
+  const homeGallery = homePhotos.length ? `
+    <button onclick="navigate('gallery')" class="relative block w-full overflow-hidden rounded-2xl bg-gray-900 shadow-sm" style="min-height:unset">
+      <img id="home-gallery-img" src="${homePhotos[_homeGalleryIndex].image}" alt="${esc(homePhotos[_homeGalleryIndex].caption || '제자반 갤러리 사진')}"
+        class="w-full aspect-[16/9] object-cover transition-opacity duration-200">
+      <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-10 text-left text-sm font-bold text-white">확~마! 갤러리</span>
+      <span class="absolute bottom-3 right-3 flex gap-1">${homePhotos.map((_,i)=>`<i data-gallery-dot class="h-1.5 w-1.5 rounded-full ${i===_homeGalleryIndex?'bg-white':'bg-white/40'}"></i>`).join('')}</span>
+    </button>` : '';
 
   const todo = `
     <div class="card">
@@ -1206,6 +1298,7 @@ function renderHome() {
 
   el.innerHTML = `
     ${bdayHome}
+    ${homeGallery}
     <div class="card">
       <div class="flex items-center justify-between">
         <div>
@@ -1231,6 +1324,7 @@ function renderHome() {
         그리고 토요일에 모입니다.
       </p>
     </div>`;
+  startHomeGallery();
 }
 
 // ==========================================
@@ -2432,6 +2526,7 @@ try {
 } catch (_) {}
 
 initFirestore();
+initGallery();
 
 // ==========================================
 // 앱 자동 업데이트 (새로고침 루프 차단 포함)
