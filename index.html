@@ -238,7 +238,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.15';
+const APP_BUILD = '2026-09-05.16';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -906,6 +906,7 @@ const GALLERY_DEFAULTS = [
   { id:'default-3', image:'./gallery/2026-08-29-group.jpg', caption:'우리들의 시작', name:'확~마! 제자반', createdAt:'2026-08-29T18:59:39+09:00' }
 ];
 let _galleryUploads = [], _galleryLoaded = false, _galleryTimer = null, _homeGalleryIndex = 0;
+let _galleryEditing = null, _galleryUploading = false;
 function galleryItems() {
   return GALLERY_DEFAULTS.concat(_galleryUploads).sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
 }
@@ -920,20 +921,52 @@ function initGallery() {
 function uploadGallery(input) {
   const f = input.files && input.files[0];
   input.value = '';
+  if (_galleryUploading) { toast('사진을 올리고 있어요. 잠시만 기다려주세요'); return; }
   if (!f || !_FS_OK || !currentUser) { if (!_FS_OK) toast('인터넷 연결을 확인해 주세요'); return; }
+  _galleryUploading = true;
   toast('사진을 준비하는 중이에요…');
   compressImage(f, image => {
-    if (!image) { toast('사진을 줄이지 못했어요. 다른 사진을 골라주세요'); return; }
+    if (!image) { _galleryUploading = false; toast('사진을 줄이지 못했어요. 다른 사진을 골라주세요'); return; }
+    if (_galleryUploads.some(x => x.image === image)) {
+      _galleryUploading = false;
+      toast('이미 올라온 사진이에요');
+      return;
+    }
     const u = findUser(currentUser) || {};
     const doc = { kind:'gallery', image, caption:val('gallery-caption'), studentId:currentUser,
                   name:u.name || '', createdAt:new Date().toISOString(), deleted:false };
     const id = `gallery_${Date.now()}_${currentUser}`;
     _db.collection('discipleDocs').doc(id).set(doc).then(() => {
-      _galleryUploads.push(Object.assign({ id }, doc));
+      _galleryUploading = false;
+      _galleryUploads = _galleryUploads.filter(x => x.id !== id).concat(Object.assign({ id }, doc));
       toast('갤러리에 올렸어요!');
       renderAll();
-    }).catch(e => { console.warn('갤러리 저장 실패:', e); toast('사진을 저장하지 못했어요. 다시 눌러주세요'); });
+    }).catch(e => { _galleryUploading = false; console.warn('갤러리 저장 실패:', e); toast('사진을 저장하지 못했어요. 다시 눌러주세요'); });
   });
+}
+function canManageGallery(item) { return !!item && (canManage() || item.studentId === currentUser); }
+function startGalleryEdit(id) { _galleryEditing = id; renderGallery(); }
+function cancelGalleryEdit() { _galleryEditing = null; renderGallery(); }
+function saveGalleryEdit(id) {
+  const item = _galleryUploads.find(x => x.id === id);
+  if (!canManageGallery(item)) return;
+  const caption = val('gallery-edit-caption');
+  _db.collection('discipleDocs').doc(id).set({ caption, editedAt:new Date().toISOString() }, { merge:true })
+    .then(() => { _galleryEditing = null; toast('사진 설명을 수정했어요'); })
+    .catch(e => { console.warn('갤러리 수정 실패:', e); toast('수정하지 못했어요. 다시 눌러주세요'); });
+}
+function deleteGallery(id) {
+  const item = _galleryUploads.find(x => x.id === id);
+  if (!canManageGallery(item)) return;
+  if (!item.deleteArmed) {
+    item.deleteArmed = true;
+    renderGallery();
+    setTimeout(() => { if (item) item.deleteArmed = false; }, 5000);
+    return;
+  }
+  _db.collection('discipleDocs').doc(id).set({ deleted:true, deletedAt:new Date().toISOString() }, { merge:true })
+    .then(() => toast('갤러리에서 삭제했어요'))
+    .catch(e => { console.warn('갤러리 삭제 실패:', e); toast('삭제하지 못했어요. 다시 눌러주세요'); });
 }
 function paintHomeGallery() {
   const img = document.getElementById('home-gallery-img');
@@ -968,10 +1001,17 @@ function renderGallery() {
       </label>
     </div>
     <div class="grid grid-cols-2 gap-3">
-      ${items.map(x => `<button onclick="showImg(this.querySelector('img').src)" class="overflow-hidden rounded-2xl bg-white text-left shadow-sm" style="min-height:unset">
-        <img src="${x.image}" alt="${esc(x.caption || '제자반 갤러리 사진')}" class="w-full aspect-square object-cover">
-        <div class="p-2"><p class="text-xs font-semibold text-gray-800 truncate">${esc(x.caption || '우리들의 순간')}</p><p class="text-[10px] text-gray-400 mt-0.5">${esc(x.name || '')}</p></div>
-      </button>`).join('')}
+      ${items.map(x => `<div class="overflow-hidden rounded-2xl bg-white shadow-sm">
+        <button onclick="showImg(this.querySelector('img').src)" class="block w-full text-left" style="min-height:unset">
+          <img src="${x.image}" alt="${esc(x.caption || '제자반 갤러리 사진')}" class="w-full aspect-square object-cover">
+        </button>
+        <div class="p-2">
+          ${_galleryEditing === x.id ? `<input id="gallery-edit-caption" type="text" maxlength="60" value="${esc(x.caption || '')}" placeholder="사진 설명">
+            <div class="flex gap-1 mt-1"><button onclick="saveGalleryEdit('${x.id}')" class="flex-1 rounded-lg bg-gray-900 py-1.5 text-[11px] font-bold text-white">저장</button><button onclick="cancelGalleryEdit()" class="flex-1 rounded-lg bg-gray-100 py-1.5 text-[11px] font-bold text-gray-500">취소</button></div>`
+          : `<p class="text-xs font-semibold text-gray-800 truncate">${esc(x.caption || '우리들의 순간')}</p><p class="text-[10px] text-gray-400 mt-0.5">${esc(x.name || '')}</p>
+            ${canManageGallery(x) ? `<div class="flex justify-end gap-2 mt-1"><button onclick="startGalleryEdit('${x.id}')" style="min-height:28px" class="text-[11px] text-gray-500">수정</button><button onclick="deleteGallery('${x.id}')" style="min-height:28px" class="text-[11px] ${x.deleteArmed?'font-bold text-red-600':'text-gray-400'}">${x.deleteArmed?'한 번 더 눌러 삭제':'삭제'}</button></div>` : ''}`}
+        </div>
+      </div>`).join('')}
     </div>`;
 }
 
