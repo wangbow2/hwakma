@@ -233,7 +233,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.6';
+const APP_BUILD = '2026-09-05.7';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1167,7 +1167,7 @@ function renderHome() {
       <span class="text-xs font-bold text-gray-400">D-${bdSoon.days}</span>
     </div>` : '');
 
-  const emergencyHome = isLeader() ? `
+  const emergencyHome = `
     <div class="card">
       <h3 class="font-bold text-gray-800 text-sm mb-2">비상연락망</h3>
       <div class="space-y-1">
@@ -1186,8 +1186,8 @@ function renderHome() {
           </div>
         </details>`).join('')}
       </div>
-      <p class="text-[11px] text-gray-400 mt-2">전화 버튼을 누르면 번호가 열립니다. 이 목록은 목사님 화면에만 보입니다.</p>
-    </div>` : '';
+      <p class="text-[11px] text-gray-400 mt-2">전화 버튼을 누르면 번호가 열립니다.</p>
+    </div>`;
 
   el.innerHTML = `
     ${bdayHome}
