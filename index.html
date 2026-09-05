@@ -233,7 +233,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.9';
+const APP_BUILD = '2026-09-05.10';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -451,7 +451,9 @@ let sermonType = 'sun';  // 금요철야 / 주일 설교 노트를 따로 제출
 let dqtWeek = 0;   // D형은 주 1회라 날짜가 아니라 주차를 고른다
 let qtCalMonth = null;
 let openPerson = { qt:null, dqt:null, pray:null, sermon:null };
-const _draft = {};        // 'kind|date|field' → 쓰다 만 글. 화면이 다시 그려져도 날아가지 않게.
+const DRAFT_LS_KEY = 'hwakma_drafts';
+let _draft = {};          // 'user|kind|date|field' → 제출 전 자동 저장본
+try { _draft = JSON.parse(localStorage.getItem(DRAFT_LS_KEY) || '{}') || {}; } catch (_) { _draft = {}; }
 let _editingDoc = null;   // 인도자가 고치는 중인 `${kind}_${id}`
 let _delArm = null;
 
@@ -776,7 +778,9 @@ function saveDoc(kind, id, date, data, okMsg) {
   const k = dkey(kind, id, date);
   const doc = Object.assign({ kind, studentId: id, date, updatedAt: new Date().toISOString() }, data);
   _docs[k] = doc;
-  Object.keys(_draft).forEach(dk => { if (dk.startsWith(kind + '|' + date + '|')) delete _draft[dk]; });
+  const draftPrefix = `${id}|${kind}|${date}|`;
+  Object.keys(_draft).forEach(dk => { if (dk.startsWith(draftPrefix)) delete _draft[dk]; });
+  saveDrafts();
   markCheck(kind, id, date, hasContent(kind, doc));
   renderAll();
   if (!_FS_OK) { toast('저장했어요 (인터넷이 없어 이 기기에만)'); return; }
@@ -892,10 +896,21 @@ function showImg(src) {
 // 쓰다 만 글 지키기 · 날짜 이동
 // ==========================================
 function dv(kind, date, field, fallback) {
-  const k = kind + '|' + date + '|' + field;
+  const k = `${currentUser}|${kind}|${date}|${field}`;
   return _draft[k] !== undefined ? _draft[k] : (fallback == null ? '' : fallback);
 }
-function dset(kind, date, field, val) { _draft[kind + '|' + date + '|' + field] = val; }
+let _draftSaveTimer = null;
+function saveDrafts() {
+  try { localStorage.setItem(DRAFT_LS_KEY, JSON.stringify(_draft)); } catch (_) {}
+}
+function dset(kind, date, field, val) {
+  _draft[`${currentUser}|${kind}|${date}|${field}`] = val;
+  clearTimeout(_draftSaveTimer);
+  _draftSaveTimer = setTimeout(() => {
+    saveDrafts();
+    document.querySelectorAll('[data-draft-status]').forEach(el => { el.textContent = '자동 저장됨'; });
+  }, 250);
+}
 function val(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
 
 function setDate(kind, ds) {
@@ -1170,7 +1185,7 @@ function renderHome() {
   const emergencyHome = `
     <div class="card">
       <h3 class="font-bold text-gray-800 text-sm mb-2">비상연락망</h3>
-      <div class="space-y-1">
+      <div class="grid grid-cols-2 gap-1.5">
         ${state.students.map(s => `<details class="phone-detail rounded-xl bg-gray-50">
           <summary class="flex items-center justify-between px-3 py-2 cursor-pointer select-none">
             <span class="text-sm font-semibold text-gray-800">${s.name}${s.role ? ` <span class="text-[10px] text-gray-400">${s.role}</span>` : ''}</span>
@@ -1639,7 +1654,7 @@ function renderDailyQT() {
     </div>
 
     <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-2">${dayLabel(qtDate)} 내 묵상</h3>
+      <div class="flex items-center justify-between mb-2"><h3 class="font-bold text-gray-800 text-sm">${dayLabel(qtDate)} 내 묵상</h3><span data-draft-status class="text-[10px] text-gray-400">입력 자동 저장</span></div>
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
         ${hasContent('qt', saved) ? `${docView('qt', saved, me, qtDate)}
@@ -1787,7 +1802,7 @@ function renderDQT() {
   const shown = _pendingImg || (saved && saved.image) || '';
   const form = `
     <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-1">${n+1}주차 내 D형 큐티</h3>
+      <div class="flex items-center justify-between mb-1"><h3 class="font-bold text-gray-800 text-sm">${n+1}주차 내 D형 큐티</h3><span data-draft-status class="text-[10px] text-gray-400">메모 자동 저장</span></div>
       <p class="text-[11px] text-gray-400 mb-1">한 주에 <b>한 번</b>이면 됩니다 · ${fmt(wi.sun)}(일) ~ ${fmt(wi.sat)}(토) 안에 올려주세요</p>
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
@@ -1933,6 +1948,18 @@ function renderPray() {
     </div>`;
   }).join('');
 
+  const rules = `<div class="card">
+    <h3 class="font-bold text-gray-800 text-sm mb-2">영적일지, 이런 기준으로 씁니다</h3>
+    ${PRAY_RULES.map(([t, b], k) => `
+      <div class="flex gap-2 py-2 border-b last:border-0">
+        <span class="w-5 h-5 flex-shrink-0 rounded-full bg-gray-900 text-white text-[11px] font-bold flex items-center justify-center mt-0.5">${k+1}</span>
+        <div class="min-w-0">
+          <p class="text-sm font-bold text-gray-800">${t}</p>
+          <p class="text-xs text-gray-600 leading-relaxed mt-0.5">${b}</p>
+        </div>
+      </div>`).join('')}
+  </div>`;
+
   // 기도 영적일지는 사적인 글이다. 친구들에게는 열지 않고 인도자만 본다.
   const leaderView = isLeader() ? peopleList('pray', prayDate, `${dayLabel(prayDate)} 기도 영적일지`,
     '기도일지는 친구들에게는 보이지 않습니다 — 인도자만 볼 수 있어요') : `
@@ -1942,6 +1969,7 @@ function renderPray() {
     </div>`;
 
   el.innerHTML = `
+    ${rules}
     ${dayStrip('pray', prayDate)}
     ${timer}
     <div class="card !py-3 text-center">
@@ -1949,7 +1977,7 @@ function renderPray() {
       <p class="text-sm font-bold text-gray-900 mt-0.5">오늘 본문 · ${esc(ref || '본문이 없는 날')}</p>
     </div>
     <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm">오늘의 기도 영적일지</h3>
+      <div class="flex items-center justify-between"><h3 class="font-bold text-gray-800 text-sm">오늘의 기도 영적일지</h3><span data-draft-status class="text-[10px] text-gray-400">입력 자동 저장</span></div>
       <p class="text-[11px] text-gray-400 mt-0.5">말씀을 가지고 내 상황을 해석하는 시간입니다</p>
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
@@ -1968,17 +1996,6 @@ function renderPray() {
       </button>
       ${lockNote(prayDate, '기도일지')}
       ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}`}
-    </div>
-    <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-2">영적일지, 이런 기준으로 씁니다</h3>
-      ${PRAY_RULES.map(([t, b], k) => `
-        <div class="flex gap-2 py-2 border-b last:border-0">
-          <span class="w-5 h-5 flex-shrink-0 rounded-full bg-gray-900 text-white text-[11px] font-bold flex items-center justify-center mt-0.5">${k+1}</span>
-          <div class="min-w-0">
-            <p class="text-sm font-bold text-gray-800">${t}</p>
-            <p class="text-xs text-gray-600 leading-relaxed mt-0.5">${b}</p>
-          </div>
-        </div>`).join('')}
     </div>
     <div class="card !py-3 text-center">
       <p class="text-sm ${cntOf('pray',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 기도일지 ${cntOf('pray',me,n)}일 / 7일 · ${cntOf('pray',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
@@ -2033,7 +2050,7 @@ function renderSermon() {
       <p class="text-[11px] text-gray-400 mt-1">예배 때 손으로 적고, 집에 와서 사진으로 올립니다</p>
     </div>
     <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-1">내 설교 노트</h3>
+      <div class="flex items-center justify-between mb-1"><h3 class="font-bold text-gray-800 text-sm">내 설교 노트</h3><span data-draft-status class="text-[10px] text-gray-400">입력 자동 저장</span></div>
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
         ${hasContent('sermon', saved) ? `${docView('sermon', saved, me, sermonDate)}
