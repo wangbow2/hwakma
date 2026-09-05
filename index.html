@@ -233,7 +233,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-05.7';
+const APP_BUILD = '2026-09-05.8';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -2066,7 +2066,7 @@ function renderSermon() {
           placeholder="본문(선택)" value="${esc(dv('sermon', sermonDate, 'passage', saved && saved.passage))}" class="flex-1 border rounded-xl p-3 text-sm">
       </div>
       <textarea id="sm-memo" rows="2" oninput="dset('sermon','${sermonDate}','memo',this.value)"
-        placeholder="한 줄 메모 — 안 써도 됩니다"
+        placeholder="메모"
         class="w-full border rounded-xl p-3 text-sm resize-none mt-2">${esc(dv('sermon', sermonDate, 'memo', saved && saved.memo))}</textarea>
       <button onclick="submitSermon('${sermonDate}')"
         class="w-full mt-3 py-4 rounded-xl font-bold text-sm ${hasContent('sermon',saved) ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'}">
