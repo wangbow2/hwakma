@@ -268,7 +268,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.8';
+const APP_BUILD = '2026-09-06.9';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1315,6 +1315,38 @@ async function togglePush() {
   }
 }
 
+// 알림이 뜰 때 "확마!" 하고 소리친다. 브라우저 알림은 소리 파일을 못 바꾸므로
+// 폰에 들어 있는 한국어 목소리로 직접 외치게 한다.
+// 화내는 소리라 낮고 빠르게, 끝을 짧게 끊는다.
+let _voiceReady = false;
+function pickKoVoice() {
+  try {
+    const vs = speechSynthesis.getVoices() || [];
+    return vs.find(v => /ko[-_]KR/i.test(v.lang)) || vs.find(v => /^ko/i.test(v.lang)) || null;
+  } catch (_) { return null; }
+}
+function sayHwakma() {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance('확마!');
+    u.lang = 'ko-KR';
+    u.rate = 1.35;      // 빠르게 — 버럭 하는 느낌
+    u.pitch = 0.45;     // 낮게 — 화난 소리
+    u.volume = 1;
+    const v = pickKoVoice();
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  } catch (_) {}
+}
+// 목소리 목록은 늦게 채워진다. 미리 한 번 깨워 둔다.
+try {
+  if ('speechSynthesis' in window) {
+    speechSynthesis.getVoices();
+    speechSynthesis.onvoiceschanged = () => { _voiceReady = true; };
+  }
+} catch (_) {}
+
 // 실제 기기 알림을 띄운다.
 function showLocalNote(x) {
   if (!pushSupported() || Notification.permission !== 'granted' || !pushOn()) return;
@@ -1336,6 +1368,7 @@ function showLocalNote(x) {
       new Notification(title, opts);
     }
   } catch (_) {}
+  sayHwakma();
 }
 
 function todayRef() { return QT_SCHEDULE[iso(today0())] || ''; }
@@ -1775,6 +1808,7 @@ function showNewNotes() {
   _newNotes.sort((a,b) => a.at < b.at ? 1 : -1);
   renderNewNotes();
   openModal('modal-newnotes');
+  sayHwakma();
 }
 function dismissNewNotes() {
   markNotesSeen();
