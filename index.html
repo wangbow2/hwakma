@@ -187,7 +187,7 @@
 <!-- 지면 크게 보기 -->
 <div id="modal-img" class="modal" onclick="closeModal('modal-img')">
   <div class="flex items-center justify-center w-full h-full p-3">
-    <img id="modal-img-src" src="" class="max-w-full max-h-[92vh] rounded-xl object-contain shadow-2xl">
+    <img id="modal-img-src" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="max-w-full max-h-[92vh] rounded-xl object-contain shadow-2xl">
   </div>
 </div>
 
@@ -289,7 +289,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-07.1';
+const APP_BUILD = '2026-09-07.3';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1044,8 +1044,9 @@ function rotateImage(kind, date) {
     toast('돌렸어요 — 아래 올리기를 눌러야 저장됩니다');
   });
 }
+const BLANK_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 function showImg(src) {
-  document.getElementById('modal-img-src').src = src;
+  document.getElementById('modal-img-src').src = src || BLANK_IMG;
   openModal('modal-img');
 }
 
@@ -1292,8 +1293,9 @@ function renderGallery() {
     <div class="grid grid-cols-2 gap-3">
       ${items.map(x => `<div class="overflow-hidden rounded-2xl bg-white shadow-sm">
         <button onclick="openPhoto('${x.id}')" class="block w-full text-left relative" style="min-height:unset">
-          <img src="${galleryThumbOf(x)}" alt="${esc(x.caption || '제자반 갤러리 사진')}"
-               loading="lazy" decoding="async" class="w-full aspect-square object-cover bg-gray-100">
+          <img src="${galleryThumbOf(x) || BLANK_IMG}" alt="${esc(x.caption || '제자반 갤러리 사진')}"
+               loading="lazy" decoding="async" onerror="this.src='${'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}'"
+               class="w-full aspect-square object-cover bg-gray-100">
           <span class="absolute bottom-2 right-2 text-[11px] font-bold px-2 py-0.5 rounded-full ${gComments(x.id).length?'':'opacity-70'}" style="background:rgba(0,0,0,.55);color:#fff">
             댓글 ${gComments(x.id).length}</span>
         </button>
@@ -1728,11 +1730,12 @@ function renderHome() {
   const myPrayCount = inRange ? cntOf('pray',me,n) : 0;
   const myFriSermon = sermonOf(me, n, 'fri') === 'O';
   const mySunSermon = sermonOf(me, n, 'sun') === 'O';
-  const homePhotos = galleryItems();
+  const homePhotos = homePool();
   _homeGalleryIndex = homePhotos.length ? _homeGalleryIndex % homePhotos.length : 0;
+  if (_homeGalleryIndex >= homePhotos.length) _homeGalleryIndex = 0;
   const homeGallery = homePhotos.length ? `
     <button onclick="navigate('gallery')" class="relative block w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm" style="min-height:unset">
-      <img id="home-gallery-img" src="${homePhotos[_homeGalleryIndex].image}" alt="${esc(homePhotos[_homeGalleryIndex].caption || '제자반 갤러리 사진')}"
+      <img id="home-gallery-img" src="${galleryThumbOf(homePhotos[_homeGalleryIndex])}" alt="${esc(homePhotos[_homeGalleryIndex].caption || '제자반 갤러리 사진')}"
         class="w-full aspect-[16/9] object-cover">
       <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-10 text-left text-sm font-bold text-white">확~마! 갤러리</span>
       <span class="absolute bottom-3 right-3 flex gap-1">${homePhotos.map((_,i)=>`<i data-gallery-dot class="h-1.5 w-1.5 rounded-full ${i===_homeGalleryIndex?'bg-white':'bg-white/40'}"></i>`).join('')}</span>
@@ -2798,6 +2801,14 @@ function renderPray() {
         <b class="text-white">소리 내어 기도하세요.</b> 속으로만 하면 금세 딴생각으로 흘러갑니다.
         통성으로 하는 것도 마음속으로 하는 것만큼 중요합니다.
       </p>
+      <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,.12)">
+        <p class="text-[10px] font-bold tracking-[.18em] text-white/40 mb-1.5">그리고 마지막에</p>
+        <p class="text-white text-[15px] font-bold leading-snug">잠잠히 듣습니다</p>
+        <p class="text-white/70 text-xs leading-relaxed mt-1.5">
+          다 아뢰었으면 입을 다물고 잠깐 기다립니다. 기도는 말하는 것만이 아니라
+          <b class="text-white">듣는 것</b>이기도 합니다. 그때 마음에 떠오른 것을 아래 일지에 적어보세요.
+        </p>
+      </div>
     </div>`;
 
   const timer = `
