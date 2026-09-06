@@ -1,6 +1,6 @@
 // 배포할 때마다 이 값만 올리면 된다. 앱이 새 버전을 알아채는 유일한 기준.
 // index.html의 APP_BUILD와 반드시 같은 값이어야 한다.
-const APP_BUILD = '2026-09-06.7';
+const APP_BUILD = '2026-09-06.8';
 const CACHE_NAME = 'hwakma-' + APP_BUILD;
 const ASSETS = [
   './',
@@ -65,6 +65,17 @@ self.addEventListener('fetch', e => {
         return res;
       }).catch(() => cached);
       return cached || network;
+    })
+  );
+});
+
+// 알림을 누르면 앱을 연다. 이미 열려 있으면 그 창을 앞으로 가져온다.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) if ('focus' in c) return c.focus();
+      return clients.openWindow('./');
     })
   );
 });
