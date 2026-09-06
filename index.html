@@ -268,7 +268,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.9';
+const APP_BUILD = '2026-09-06.10';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1347,8 +1347,11 @@ try {
   }
 } catch (_) {}
 
-// 실제 기기 알림을 띄운다.
+// 소리와 알림 배너는 따로 논다.
+// 소리는 아무 설정 없이 누구에게나 난다 — 앱만 열려 있으면 된다.
+// 화면 위에 뜨는 배너는 브라우저가 사람마다 허락을 받으라고 해서, 켠 사람에게만 뜬다.
 function showLocalNote(x) {
+  sayHwakma();
   if (!pushSupported() || Notification.permission !== 'granted' || !pushOn()) return;
   const title = x.leader ? `${x.name || '목사님'}이 댓글을 남겼어요`
                          : `${x.name || '새 댓글'} · ${NOTE_LABEL[x.target] || ''}`.trim();
@@ -1368,7 +1371,6 @@ function showLocalNote(x) {
       new Notification(title, opts);
     }
   } catch (_) {}
-  sayHwakma();
 }
 
 function todayRef() { return QT_SCHEDULE[iso(today0())] || ''; }
