@@ -17,6 +17,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
 <style>
   * { -webkit-tap-highlight-color: transparent; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
@@ -214,6 +215,7 @@
       <p class="text-xs text-gray-500 mt-0.5" id="user-menu-role"></p>
     </div>
     <div class="p-2">
+      <button id="btn-push" onclick="closeModal('modal-user-menu');togglePush()" class="w-full text-left px-4 py-3 text-sm text-gray-700 rounded-xl active:bg-gray-50">알림 받기</button>
       <button onclick="closeModal('modal-user-menu');openModal('modal-pin')" class="w-full text-left px-4 py-3 text-sm text-gray-700 rounded-xl active:bg-gray-50">🔐 PIN 번호 변경</button>
       <button id="btn-settings" onclick="closeModal('modal-user-menu');openModal('modal-settings')" class="w-full text-left px-4 py-3 text-sm text-gray-700 rounded-xl active:bg-gray-50 hidden">📅 제자반 시작 주일 설정</button>
       <button onclick="doLogout()" class="w-full text-left px-4 py-3 text-sm text-red-600 rounded-xl active:bg-gray-50">로그아웃</button>
@@ -267,7 +269,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.5';
+const APP_BUILD = '2026-09-06.6';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -704,6 +706,7 @@ function doLogin() {
   resetDates();
   renderAll();
   watchNotes();
+  initPushForeground();
 }
 function doLogout() {
   _newNotes = [];
@@ -1240,6 +1243,7 @@ function renderAll() {
   document.getElementById('nav-check').classList.toggle('hidden', !canSeeCheck());
   document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
   paintNoteDots();
+  paintPushBtn();
   ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
      sermon: renderSermon, gallery: renderGallery, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
 }
@@ -1266,6 +1270,84 @@ function paintNoteDots() {
       dot.remove();
     }
   });
+}
+
+// ==========================================
+// 폰 알림 — 앱을 꺼 두어도 댓글이 달리면 알려준다.
+// 홈 화면에 추가해 둔 폰에서만 제대로 동작한다(아이폰은 반드시).
+// ==========================================
+// 파이어베이스 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서에서 만든 키.
+const VAPID_KEY = '';   // ← 여기에 넣으면 알림이 켜진다
+let _messaging = null;
+
+function pushSupported() {
+  return !!(VAPID_KEY && window.firebase && firebase.messaging &&
+            'serviceWorker' in navigator && 'Notification' in window && _FS_OK);
+}
+function pushOn() {
+  try { return localStorage.getItem('hwakma_push_' + currentUser) === 'on'; } catch (_) { return false; }
+}
+function paintPushBtn() {
+  const b = document.getElementById('btn-push');
+  if (!b) return;
+  if (!pushSupported()) { b.classList.add('hidden'); return; }
+  b.classList.remove('hidden');
+  const granted = Notification.permission === 'granted';
+  b.textContent = (granted && pushOn()) ? '알림 끄기' : '알림 받기';
+}
+
+async function togglePush() {
+  if (!pushSupported()) { toast('이 기기에서는 알림을 켤 수 없어요'); return; }
+  if (Notification.permission === 'granted' && pushOn()) { await pushOff(); return; }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      toast('알림이 막혀 있어요. 폰 설정에서 이 앱 알림을 켜주세요', 4000);
+      return;
+    }
+    const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    _messaging = _messaging || firebase.messaging();
+    const token = await _messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    if (!token) { toast('알림 등록에 실패했어요'); return; }
+    await _db.collection('discipleTokens').doc(currentUser).set({
+      tokens: firebase.firestore.FieldValue.arrayUnion(token),
+      name: (findUser(currentUser) || {}).name || '',
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    try { localStorage.setItem('hwakma_push_' + currentUser, 'on'); } catch (_) {}
+    try { localStorage.setItem('hwakma_push_token_' + currentUser, token); } catch (_) {}
+    paintPushBtn();
+    toast('알림을 켰어요. 댓글이 달리면 폰으로 알려드립니다', 3500);
+  } catch (e) {
+    console.warn('알림 켜기 실패:', e);
+    toast('알림을 켜지 못했어요');
+  }
+}
+async function pushOff() {
+  try {
+    const token = localStorage.getItem('hwakma_push_token_' + currentUser);
+    if (token && _FS_OK) {
+      await _db.collection('discipleTokens').doc(currentUser).set({
+        tokens: firebase.firestore.FieldValue.arrayRemove(token)
+      }, { merge: true });
+    }
+    localStorage.removeItem('hwakma_push_' + currentUser);
+    localStorage.removeItem('hwakma_push_token_' + currentUser);
+  } catch (e) { console.warn('알림 끄기 실패:', e); }
+  paintPushBtn();
+  toast('알림을 껐어요');
+}
+
+// 앱을 열어 둔 채로 알림이 오면 화면 안에서 알려준다.
+function initPushForeground() {
+  if (!pushSupported() || !pushOn()) return;
+  try {
+    _messaging = _messaging || firebase.messaging();
+    _messaging.onMessage(payload => {
+      const d = payload.data || {};
+      toast(`${d.title || '새 댓글'} — ${(d.body || '').slice(0, 40)}`, 5000);
+    });
+  } catch (e) { console.warn('알림 수신 준비 실패:', e); }
 }
 
 function todayRef() { return QT_SCHEDULE[iso(today0())] || ''; }
@@ -2963,6 +3045,7 @@ try {
     document.getElementById('login-screen').style.display = 'none';
     renderAll();
     watchNotes();
+    initPushForeground();
   }
 } catch (_) {}
 
