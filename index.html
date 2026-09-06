@@ -267,7 +267,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.3';
+const APP_BUILD = '2026-09-06.4';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1831,6 +1831,18 @@ function saveEditDoc(kind, id, date) {
 }
 
 // 손으로 쓴 것이 올라오는 피드. 낸 사람은 펼쳐서, 안 낸 사람은 아래에 이름만.
+// 접힌 줄에 한 조각만 보여 준다 — 누구 것인지 알아볼 만큼만.
+function docPreview(kind, doc) {
+  if (!doc) return '';
+  if (kind === 'sermon') return (doc.title || '').trim();
+  const fields = { qt:['text'], dqt:['memo'], pray:['verse','read','feel','prayer'] }[kind] || [];
+  for (const f of fields) {
+    const v = (doc[f] || '').trim();
+    if (v) return v.replace(/\s+/g, ' ').slice(0, 30);
+  }
+  return doc.image ? '사진' : '';
+}
+
 function photoFeed(kind, date, heading, note) {
   const people = state.students.concat(LEADERS.filter(l => l.id === MANAGER && l.id !== currentUser));
   people.forEach(s => loadDoc(kind, s.id, date));
@@ -1847,6 +1859,7 @@ function photoFeed(kind, date, heading, note) {
   const needFeedback = canManage()
     ? done.filter(x => !hasLeaderNote(kind, x.s.id, date)).map(x => x.s.name) : [];
   const yet = waiting.filter(x => !x.loading);
+  const usesPhoto = kind !== 'pray';
 
   // 한 사람씩 한 줄로 접어 둔다. 누른 사람 것만 펼쳐 보여준다 —
   // 열한 명 사진을 다 펼쳐 두면 화면이 너무 길어져 확인이 힘들다.
@@ -1860,8 +1873,9 @@ function photoFeed(kind, date, heading, note) {
     return `<div class="border-b last:border-0">
       <div onclick="openPerson['${kind}'] = openPerson['${kind}']==='${s.id}' ? null : '${s.id}'; _editingDoc=null; _delArm=null; _replyTo=null; renderAll()"
            class="flex items-center gap-2.5 py-2 cursor-pointer">
-        ${doc.image ? `<img src="${doc.image}" class="w-11 h-11 rounded-lg object-cover border flex-shrink-0" style="background:#F9FAFB">`
-                    : `<div class="w-11 h-11 rounded-lg border flex-shrink-0 bg-gray-50"></div>`}
+        ${!usesPhoto ? '' : doc.image
+            ? `<img src="${doc.image}" class="w-11 h-11 rounded-lg object-cover border flex-shrink-0" style="background:#F9FAFB">`
+            : `<div class="w-11 h-11 rounded-lg border flex-shrink-0 bg-gray-50"></div>`}
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
             <span class="text-sm font-bold text-gray-900 truncate">${s.name}${me?' <span class="text-[11px] font-normal text-gray-400">(나)</span>':''}</span>
@@ -1869,7 +1883,7 @@ function photoFeed(kind, date, heading, note) {
             ${doc.late ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-700 flex-shrink-0">늦음</span>' : ''}
             ${noFb ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-bold flex-shrink-0">피드백 필요</span>' : ''}
           </div>
-          <p class="text-[11px] text-gray-400 mt-0.5 truncate">${when}${cnt ? ` · 댓글 ${cnt}` : ''}${(doc.title||'').trim() ? ` · ${esc(doc.title)}` : ''}</p>
+          <p class="text-[11px] text-gray-400 mt-0.5 truncate">${when}${cnt ? ` · 댓글 ${cnt}` : ''}${docPreview(kind, doc) ? ` · ${esc(docPreview(kind, doc))}` : ''}</p>
         </div>
         <span class="text-gray-300 text-xs flex-shrink-0">${open?'▲':'▼'}</span>
       </div>
@@ -1918,8 +1932,8 @@ function photoFeed(kind, date, heading, note) {
 // 그날 반 전체가 낸 것 — 서로 보고 배우라고 열어 둔다(기도 영적일지만 빼고).
 // D형 큐티와 설교 노트는 손으로 쓴 사진이라 접지 않고 피드처럼 펼쳐 보여준다.
 function peopleList(kind, date, heading, note) {
-  const feed = (kind === 'dqt' || kind === 'sermon');
-  if (feed) return photoFeed(kind, date, heading, note);
+  // 큐티·D형·기도·설교 모두 한 줄로 접어 둔다 — 열한 명을 펼쳐 두면 화면이 너무 길다.
+  return photoFeed(kind, date, heading, note);
   let people = state.students.concat(LEADERS.filter(l => l.id === MANAGER));
   people.forEach(x => loadDoc(kind, x.id, date));
   // 목사님 화면에서는 아직 안 낸 아이를 위로 올린다 — 누가 빠졌는지 빨리 보이도록.
@@ -2096,7 +2110,7 @@ function renderDailyQT() {
       <p class="text-[11px] text-gray-400 mt-2 text-center">사진을 누르면 크게 볼 수 있어요 · 성서유니온 「청소년 매일성경」</p>
     </div>
 
-    <div class="card">
+    ${isLeader() ? '' : `<div class="card">
       <div class="flex items-center justify-between mb-2"><h3 class="font-bold text-gray-800 text-sm">${dayLabel(qtDate)} 내 묵상</h3><span data-draft-status class="text-[10px] text-gray-400">입력 자동 저장</span></div>
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
@@ -2120,7 +2134,7 @@ function renderDailyQT() {
 
     <div class="card !py-3 text-center">
       <p class="text-sm ${cntOf('qt',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 큐티 ${cntOf('qt',me,n)}일 / 7일 · ${cntOf('qt',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
-    </div>
+    </div>`}
 
     ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 그날 올린 묵상을 볼 수 있어요')}
 `;
@@ -2411,6 +2425,18 @@ function renderPray() {
       <p class="text-xs text-gray-700 leading-relaxed">기도 영적일지는 <b>친구들에게 보이지 않습니다.</b>
       나와 인도자(황영환 목사님)만 볼 수 있어요. 그러니 정직하게 적으세요.</p>
     </div>`;
+
+  if (isLeader()) {
+    el.innerHTML = `
+      ${dayStrip('pray', prayDate)}
+      <div class="card !py-3 text-center">
+        <p class="text-xs text-gray-500">${n+1}주차 · ${dayLabel(prayDate)}</p>
+        <p class="text-sm font-bold text-gray-900 mt-0.5">${esc(ref || '본문이 없는 날')}</p>
+        <p class="text-[11px] text-gray-400 mt-1">이름을 누르면 그날 일지와 비밀 댓글이 펼쳐집니다</p>
+      </div>
+      ${leaderView}`;
+    return;
+  }
 
   el.innerHTML = `
     ${rules}
@@ -2745,48 +2771,124 @@ function checkCard(s, n, compact) {
   </div>`;
 }
 
+// 한 주를 한 화면에 담는다 — 열한 명이 한눈에 들어와야 확인이 빠르다.
+// 이름 줄을 누르면 그 아이의 요일별 칸이 아래로 펼쳐진다.
+let checkOpen = null;
+function toggleCheckRow(id) { checkOpen = checkOpen === id ? null : id; renderAll(); }
+
 function renderCheck() {
   const el = document.getElementById('page-check');
   if (!canSeeCheck()) { navigate('home'); return; }
-  const n = checkWeek, wi = weekInfo(n);
+  const n = checkWeek, wi = weekInfo(n), edit = isLeader();
+
   const tabs = `<div class="scroll-table -mx-1 px-1"><div class="flex gap-1.5 pb-1">
-    ${Array.from({length:WEEKS}, (_,i) => `<button onclick="checkWeek=${i};renderAll()"
+    ${Array.from({length:WEEKS}, (_,i) => `<button onclick="checkWeek=${i};checkOpen=null;renderAll()"
       class="px-3 py-2 rounded-xl text-xs font-bold flex-shrink-0 ${i===n?'bg-gray-900 text-white':'bg-white text-gray-600 border'}">${i+1}주</button>`).join('')}
   </div></div>`;
 
-  const rows = state.students.map(s => checkCard(s, n, false)).join('');
+  // 한 칸 — 색만 보고도 상태를 안다.
+  const cell = (txt, cls, onclick) =>
+    `<td class="px-1 py-1.5 text-center"><div class="rounded-md text-[11px] font-bold py-1.5 ${cls} ${edit?'cursor-pointer':''}"
+      ${edit && onclick ? `onclick="event.stopPropagation();${onclick}"` : ''}>${txt}</div></td>`;
+  const numCell = (v, good) =>
+    `<td class="px-1 py-1.5 text-center"><div class="rounded-md text-[11px] font-bold py-1.5 ${v>=good?'bg-blue-50 text-blue-700':(v?'bg-gray-50 text-gray-600':'bg-gray-50 text-gray-300')}">${v}</div></td>`;
+
+  const rows = state.students.map(s => {
+    const a = attOf(s.id, n), sm = sermonOf(s.id, n), dq = dqtDone(s.id, n);
+    const q = cntOf('qt', s.id, n), pr = cntOf('pray', s.id, n);
+    const open = checkOpen === s.id;
+    const dotRow = (label, field, cls) => `
+      <div class="flex items-end gap-1 mt-1.5">
+        <span class="text-[11px] text-gray-400 mb-2 w-12 flex-shrink-0">${label}</span>
+        ${DOW7.map((w,i) => {
+          const on = arrOf(field, s.id, n)[i];
+          return `<div class="flex flex-col items-center gap-0.5 flex-1 min-w-0">
+            <span class="text-[10px] ${i===0?'text-red-400':i===6?'text-blue-400':'text-gray-400'}">${w}</span>
+            <div class="dot7 w-full ${on?cls:''} ${edit?'':'opacity-70'}" onclick="toggleDot('${field}','${s.id}',${n},${i})">${on?'✓':''}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    return `
+      <tr class="border-b last:border-0 ${open?'bg-gray-50':''}" onclick="toggleCheckRow('${s.id}')">
+        <td class="px-2 py-1.5 whitespace-nowrap">
+          <span class="text-xs font-bold text-gray-900">${s.name}</span>
+          ${s.role ? `<span class="text-[9px] text-gray-400 ml-0.5">${s.role}</span>` : ''}
+        </td>
+        ${cell(sm || '·', sm ? 'gate-'+sm : 'bg-gray-50 text-gray-300', `cycleSermon('${s.id}',${n})`)}
+        ${cell(dq ? 'O' : '·', dq ? 'gate-O' : 'bg-gray-50 text-gray-300', `toggleDqtWeek('${s.id}',${n})`)}
+        ${cell(a ? ATT_SHORT[a] : '·', a ? 'st-'+a : 'bg-gray-50 text-gray-300', `cycleAtt('${s.id}',${n})`)}
+        ${numCell(q, 4)}
+        ${numCell(pr, 4)}
+      </tr>
+      ${open ? `<tr class="bg-gray-50 border-b"><td colspan="6" class="px-2 pb-3">
+        ${dotRow('큐티','qt','on')}
+        ${dotRow('기도일지','pray','on-p')}
+        <p class="text-[11px] text-gray-400 mt-2">${edit ? '칸을 눌러 켜고 끕니다' : '보기만 할 수 있습니다'}</p>
+      </td></tr>` : ''}`;
+  }).join('');
 
   const totals = `
-    <div class="card !p-0 overflow-hidden">
-      <div class="scroll-table">
+    <details class="card !p-0 overflow-hidden">
+      <summary class="px-3 py-3 text-sm font-bold text-gray-800 cursor-pointer select-none">전체 합계 보기</summary>
+      <div class="scroll-table border-t">
         <table class="w-full text-sm">
           <thead class="bg-gray-50 border-b">
-            <tr>${['이름','출석','지각','무지','결석','무결','금철','주일','큐티','D형','기도'].map(h =>
+            <tr>${['이름','출석','지각','무지','결석','무결','설교','큐티','D형','기도'].map(h =>
               `<th class="px-2 py-2 text-[11px] font-bold text-gray-500">${h}</th>`).join('')}</tr>
           </thead>
           <tbody>
             ${state.students.map(s => {
               const t = totalOf(s.id);
-              const cell = (v, warn) => `<td class="px-2 py-2 text-center text-xs ${warn&&v?'text-red-600 font-bold':(v?'text-gray-800':'text-gray-300')}">${v}</td>`;
+              const c = (v, warn) => `<td class="px-2 py-2 text-center text-xs ${warn&&v?'text-red-600 font-bold':(v?'text-gray-800':'text-gray-300')}">${v}</td>`;
               return `<tr class="border-b last:border-0">
                 <td class="px-2 py-2 font-semibold text-gray-800 text-xs whitespace-nowrap">${s.name}</td>
-                ${cell(t.출석)}${cell(t.지각,1)}${cell(t.무단지각,1)}${cell(t.결석,1)}${cell(t.무단결석,1)}
-                ${cell(t.sermonFri)}${cell(t.sermonSun)}${cell(t.qt)}${cell(t.dqt)}${cell(t.pray)}
+                ${c(t.출석)}${c(t.지각,1)}${c(t.무단지각,1)}${c(t.결석,1)}${c(t.무단결석,1)}
+                ${c(t.sermon)}${c(t.qt)}${c(t.dqt)}${c(t.pray)}
               </tr>`;
             }).join('')}
           </tbody>
         </table>
       </div>
       <p class="text-[11px] text-gray-400 px-3 py-2">지금까지 시작된 주(${totalOf(state.students[0].id).주차}주)를 모두 더한 값입니다.</p>
-    </div>`;
+    </details>`;
+
+  // 그 주에 빠진 것들을 위에 한 줄로 모아 준다.
+  const miss = {
+    설교: state.students.filter(x => sermonOf(x.id,n) !== 'O').map(x => x.name),
+    D형:  state.students.filter(x => !dqtDone(x.id,n)).map(x => x.name),
+    모임: state.students.filter(x => !attOf(x.id,n)).map(x => x.name)
+  };
+  const missCard = `<div class="card !py-3">
+    ${Object.keys(miss).map(k => `
+      <div class="flex gap-2 items-baseline py-1 border-b last:border-0">
+        <span class="text-[11px] font-bold ${miss[k].length?'text-amber-700':'text-green-700'} w-10 flex-shrink-0">${k}</span>
+        <span class="text-[11px] ${miss[k].length?'text-gray-700':'text-green-700 font-semibold'} leading-relaxed">${miss[k].length ? miss[k].join(' · ') : '전원 완료'}</span>
+      </div>`).join('')}
+  </div>`;
 
   el.innerHTML = tabs + `
-    <div class="card !py-3 bg-gray-50 border border-gray-200">
+    <div class="card !py-2.5 bg-gray-50 border border-gray-200">
       <p class="text-sm font-bold text-gray-900">${n+1}주차 · ${fmt(wi.sun)}(일) ~ ${fmt(wi.sat)}(토)</p>
-      <p class="text-xs text-gray-700 mt-0.5">${isLeader()
-        ? '칸을 누르면 상태가 바뀝니다 · 출석 → 지각 → 무단지각 → 결석 → 무단결석'
-        : '반장은 보기만 할 수 있습니다 · 고치는 것은 목사님만'}</p>
-    </div>` + rows + totals;
+      <p class="text-[11px] text-gray-600 mt-0.5">${edit ? '칸을 누르면 바뀝니다 · 이름을 누르면 요일별로 펼쳐집니다' : '반장은 보기만 할 수 있습니다'}</p>
+    </div>
+    ${missCard}
+    <div class="card !p-0 overflow-hidden">
+      <table class="w-full" style="table-layout:fixed">
+        <colgroup><col style="width:22%"><col><col><col><col><col></colgroup>
+        <thead class="bg-gray-50 border-b">
+          <tr>
+            <th class="px-2 py-2 text-[11px] font-bold text-gray-500 text-left">이름</th>
+            <th class="px-1 py-2 text-[11px] font-bold text-gray-500">설교</th>
+            <th class="px-1 py-2 text-[11px] font-bold text-gray-500">D형</th>
+            <th class="px-1 py-2 text-[11px] font-bold text-gray-500">모임</th>
+            <th class="px-1 py-2 text-[11px] font-bold text-gray-500">큐티</th>
+            <th class="px-1 py-2 text-[11px] font-bold text-gray-500">기도</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${totals}`;
 }
 
 // ==========================================
