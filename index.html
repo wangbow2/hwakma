@@ -191,6 +191,27 @@
   </div>
 </div>
 
+<!-- 사진첩 사진 하나 보기 · 댓글 -->
+<div id="modal-photo" class="modal">
+  <div class="bg-white rounded-2xl w-full max-w-md mx-4 max-h-[88vh] flex flex-col overflow-hidden">
+    <div class="p-3 border-b flex items-center justify-between gap-2">
+      <div class="min-w-0">
+        <p id="photo-caption" class="font-bold text-gray-900 text-sm truncate"></p>
+        <p id="photo-by" class="text-[11px] text-gray-400 mt-0.5 truncate"></p>
+      </div>
+      <button onclick="closeModal('modal-photo')" style="min-height:32px" class="text-gray-400 text-xl px-2">&times;</button>
+    </div>
+    <div id="photo-body" class="overflow-y-auto flex-1"></div>
+    <div class="p-3 border-t">
+      <div class="flex gap-2">
+        <input type="text" id="photo-comment" maxlength="200" placeholder="한마디 남기기"
+               onkeydown="if(event.key==='Enter') addGalleryComment()" class="flex-1">
+        <button onclick="addGalleryComment()" style="min-height:44px" class="px-4 rounded-xl bg-gray-900 text-white font-bold text-sm flex-shrink-0">남기기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 새 댓글 알림 -->
 <div id="modal-newnotes" class="modal">
   <div class="bg-white rounded-2xl w-full max-w-sm mx-4 max-h-[80vh] flex flex-col overflow-hidden">
@@ -268,7 +289,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.10';
+const APP_BUILD = '2026-09-06.11';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -792,7 +813,7 @@ function hasContent(kind, doc) {
   if (kind === 'qt')     return !!((doc.text||'').trim() || doc.image);
   if (kind === 'dqt')    return !!(doc.image || (doc.memo||'').trim());
   if (kind === 'pray')   return !!((doc.verse||'').trim() || (doc.read||'').trim() || (doc.question||'').trim() || (doc.feel||'').trim() || (doc.prayer||'').trim());
-  if (kind === 'sermon') return !!(doc.image || (doc.title||'').trim() || (doc.memo||'').trim());
+  if (kind === 'sermon') return !!(pagesOf(doc).length || (doc.title||'').trim() || (doc.memo||'').trim());
   if (kind === 'bday')   return !!(Array.isArray(doc.msgs) && doc.msgs.length);
   return false;
 }
@@ -906,6 +927,97 @@ function _rotate90(dataUrl, cb) {
   };
   img.src = dataUrl;
 }
+// ── 설교 노트는 여러 장 올린다(공책 두세 면) ──
+// 문서 하나에 다 담으므로 전체 크기를 850KB 아래로 맞춘다.
+const PAGES_MAX = 4;
+const PAGES_CAP = 850000;
+let _pendingPages = null;   // null이면 저장된 것 그대로, 배열이면 이번에 고른 것
+
+function pagesOf(doc) {
+  if (!doc) return [];
+  if (Array.isArray(doc.images) && doc.images.length) return doc.images.filter(Boolean);
+  return doc.image ? [doc.image] : [];
+}
+function shownPages(saved) { return _pendingPages !== null ? _pendingPages : pagesOf(saved); }
+function clearPages() { _pendingPages = []; renderAll(); }
+
+// 이미 줄여 둔 사진을 한 번 더 줄인다 — 장수가 늘어 자리가 모자랄 때.
+function _reencode(dataUrl, budget, cb) {
+  const img = new Image();
+  img.onerror = () => cb(dataUrl);
+  img.onload = () => {
+    try {
+      let scale = 1, out = dataUrl;
+      for (let round = 0; round < 3 && out.length > budget; round++) {
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        let q = 0.7;
+        out = c.toDataURL('image/jpeg', q);
+        while (out.length > budget && q > 0.3) { q -= 0.08; out = c.toDataURL('image/jpeg', q); }
+        scale *= 0.8;
+      }
+      cb(out);
+    } catch (_) { cb(dataUrl); }
+  };
+  img.src = dataUrl;
+}
+// 다 합쳐 850KB를 넘으면 장수로 나눠 각자 줄인다.
+function fitPages(list, cb) {
+  const total = list.reduce((a, b) => a + b.length, 0);
+  if (total <= PAGES_CAP) { cb(list); return; }
+  const budget = Math.floor(PAGES_CAP / list.length);
+  const out = new Array(list.length);
+  let left = list.length;
+  list.forEach((d, i) => {
+    if (d.length <= budget) { out[i] = d; if (!--left) cb(out); return; }
+    _reencode(d, budget, r => { out[i] = r; if (!--left) cb(out); });
+  });
+}
+
+function pickPages(input) {
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if (!files.length) return;
+  const cur = shownPages(getDoc('sermon', currentUser, sermonDate)).slice();
+  const room = PAGES_MAX - cur.length;
+  if (room <= 0) { toast(`사진은 ${PAGES_MAX}장까지예요`); return; }
+  const take = files.slice(0, room);
+  if (files.length > room) toast(`${PAGES_MAX}장까지만 담았어요`);
+  toast('사진을 줄이는 중이에요…');
+  let left = take.length;
+  const got = new Array(take.length);
+  take.forEach((f, i) => {
+    compressImage(f, dataUrl => {
+      got[i] = dataUrl || null;
+      if (--left) return;
+      const added = got.filter(Boolean);
+      if (!added.length) { toast('사진이 너무 커요. 다른 사진으로 해볼래요?'); return; }
+      _pendingPages = cur.concat(added);
+      renderAll();
+    });
+  });
+}
+function removePage(i) {
+  const cur = shownPages(getDoc('sermon', currentUser, sermonDate)).slice();
+  cur.splice(i, 1);
+  _pendingPages = cur;
+  renderAll();
+}
+function rotatePage(i) {
+  const cur = shownPages(getDoc('sermon', currentUser, sermonDate)).slice();
+  if (!cur[i]) return;
+  toast('돌리는 중이에요…');
+  _rotate90(cur[i], out => {
+    if (!out) { toast('사진을 못 돌렸어요'); return; }
+    cur[i] = out;
+    _pendingPages = cur;
+    renderAll();
+    toast('돌렸어요 — 아래 올리기를 눌러야 저장됩니다');
+  });
+}
+
 function pickImage(input) {
   const f = input.files && input.files[0];
   input.value = '';
@@ -947,6 +1059,7 @@ function galleryItems() {
   return GALLERY_DEFAULTS.concat(_galleryUploads).sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
 }
 function initGallery() {
+  initGalleryComments();
   if (!_FS_OK || _galleryLoaded) return;
   _galleryLoaded = true;
   _db.collection('discipleDocs').where('kind','==','gallery').onSnapshot(snap => {
@@ -954,6 +1067,82 @@ function initGallery() {
     if (currentUser) renderAll();
   }, e => { _galleryLoaded = false; console.warn('갤러리 불러오기 실패:', e); });
 }
+// ── 사진첩 댓글 ──
+// 사진 문서가 커지지 않도록 댓글은 문서 하나에 몰아 담는다.
+// 기본 사진(파일로 박아 둔 것)에도 똑같이 달 수 있다.
+let _galleryComments = {}, _gcLoaded = false, _photoOpen = null;
+function initGalleryComments() {
+  if (!_FS_OK || _gcLoaded) return;
+  _gcLoaded = true;
+  _db.collection('discipleDocs').doc('galleryComments').onSnapshot(d => {
+    _galleryComments = (d.exists && d.data().map) || {};
+    if (currentUser) {
+      if (_photoOpen) paintPhoto();
+      renderAll();
+    }
+  }, e => { _gcLoaded = false; console.warn('사진첩 댓글 불러오기 실패:', e); });
+}
+function gComments(id) { const v = _galleryComments[id]; return Array.isArray(v) ? v : []; }
+function gPhoto(id) { return galleryItems().find(x => x.id === id) || null; }
+
+function openPhoto(id) {
+  _photoOpen = id;
+  paintPhoto();
+  openModal('modal-photo');
+}
+function paintPhoto() {
+  const x = gPhoto(_photoOpen);
+  if (!x) { closeModal('modal-photo'); return; }
+  document.getElementById('photo-caption').textContent = x.caption || '우리들의 순간';
+  document.getElementById('photo-by').textContent =
+    `${x.name || ''}${x.createdAt ? ' · ' + new Date(x.createdAt).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}) : ''}`;
+  const list = gComments(_photoOpen);
+  document.getElementById('photo-body').innerHTML = `
+    <img src="${x.image}" onclick="showImg(this.src)" class="w-full cursor-pointer" style="max-height:46vh;object-fit:contain;background:#F3F4F6">
+    <div class="p-3">
+      ${list.length ? list.map((c, i) => `
+        <div class="py-2 border-b last:border-0">
+          <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">${esc(c.text)}</p>
+          <div class="flex items-center justify-between mt-1">
+            <p class="text-[11px] text-gray-400">${esc(c.name || '')}${c.leader ? ' 목사님' : ''} · ${c.at ? new Date(c.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</p>
+            ${(canManage() || c.by === currentUser) ? `<button onclick="removeGalleryComment(${i})" style="min-height:24px" class="text-[11px] text-red-400 px-1">지우기</button>` : ''}
+          </div>
+        </div>`).join('')
+      : `<p class="text-xs text-gray-400 py-3 text-center">아직 댓글이 없어요. 처음으로 남겨보세요</p>`}
+    </div>`;
+}
+function saveGalleryComments(id, arr, okMsg) {
+  _galleryComments = Object.assign({}, _galleryComments, { [id]: arr });
+  paintPhoto();
+  renderAll();
+  if (!_FS_OK) { toast('저장했어요 (인터넷이 없어 이 기기에만)'); return; }
+  _db.collection('discipleDocs').doc('galleryComments')
+    .set({ kind: 'gallerycmt', map: { [id]: arr }, updatedAt: new Date().toISOString() }, { merge: true })
+    .then(() => { if (okMsg) toast(okMsg); })
+    .catch(e => { console.warn('사진첩 댓글 저장 실패:', e); toast('저장이 안 됐어요. 잠시 뒤 다시 눌러주세요'); });
+}
+function addGalleryComment() {
+  const id = _photoOpen;
+  if (!id) return;
+  const el = document.getElementById('photo-comment');
+  const text = (el ? el.value : '').trim();
+  if (!text) { toast('한마디 적어주세요'); return; }
+  if (el) el.value = '';
+  saveGalleryComments(id, gComments(id).concat([{
+    by: currentUser, name: (findUser(currentUser) || {}).name || '',
+    leader: isLeader(), text, at: new Date().toISOString()
+  }]), '남겼어요!');
+}
+function removeGalleryComment(i) {
+  const id = _photoOpen;
+  if (!id) return;
+  const arr = gComments(id).slice();
+  const c = arr[i];
+  if (!c || (!canManage() && c.by !== currentUser)) return;
+  arr.splice(i, 1);
+  saveGalleryComments(id, arr, '지웠어요');
+}
+
 async function uploadGallery(input) {
   const files = Array.from(input.files || []);
   input.value = '';
@@ -1038,8 +1227,10 @@ function renderGallery() {
     </div>
     <div class="grid grid-cols-2 gap-3">
       ${items.map(x => `<div class="overflow-hidden rounded-2xl bg-white shadow-sm">
-        <button onclick="showImg(this.querySelector('img').src)" class="block w-full text-left" style="min-height:unset">
+        <button onclick="openPhoto('${x.id}')" class="block w-full text-left relative" style="min-height:unset">
           <img src="${x.image}" alt="${esc(x.caption || '제자반 갤러리 사진')}" class="w-full aspect-square object-cover">
+          <span class="absolute bottom-2 right-2 text-[11px] font-bold px-2 py-0.5 rounded-full ${gComments(x.id).length?'':'opacity-70'}" style="background:rgba(0,0,0,.55);color:#fff">
+            댓글 ${gComments(x.id).length}</span>
         </button>
         <div class="p-2">
           ${_galleryEditing === x.id ? `<input id="gallery-edit-caption" type="text" maxlength="60" value="${esc(x.caption || '')}" placeholder="사진 설명">
@@ -1076,7 +1267,7 @@ function setDate(kind, ds) {
   if (kind === 'qt') { qtDate = ds; qtCalMonth = ds.slice(0,7); }
   else if (kind === 'pray') prayDate = ds;
   else sermonDate = ds;
-  openPerson[kind] = null; _pendingImg = null; _editingDoc = null; _delArm = null;
+  openPerson[kind] = null; _pendingImg = null; _pendingPages = null; _editingDoc = null; _delArm = null;
   renderAll();
 }
 function shiftWeekOf(kind, cur, step) {
@@ -1176,11 +1367,16 @@ function submitSermon(date) {
   const id = currentUser;
   if (!canWriteSermon(date)) { toast('그 주일 노트는 닫혔어요'); renderAll(); return; }
   const prev = getDoc('sermon', id, date) || {};
-  const d = { title: val('sm-title'), passage: val('sm-passage'), memo: val('sm-memo'),
-              image: _pendingImg || prev.image || '' };
-  if (!d.image) { toast('손으로 쓴 설교 노트를 사진으로 올려주세요'); return; }
-  _pendingImg = null;
-  saveDoc('sermon', id, date, d, '설교 노트를 올렸어요!');
+  const pages = shownPages(prev);
+  if (!pages.length) { toast('손으로 쓴 설교 노트를 사진으로 올려주세요'); return; }
+  const meta = { title: val('sm-title'), passage: val('sm-passage'), memo: val('sm-memo') };
+  toast('올리는 중이에요…');
+  fitPages(pages, fitted => {
+    _pendingPages = null;
+    // image는 예전 자료와 목록 썸네일을 위해 첫 장을 그대로 둔다.
+    saveDoc('sermon', id, date, Object.assign({}, meta, { images: fitted, image: fitted[0] }),
+            `설교 노트 ${fitted.length}장을 올렸어요!`);
+  });
 }
 
 // ==========================================
@@ -1888,9 +2084,12 @@ function docView(kind, doc, id, date) {
     const head = kind === 'sermon' && ((doc.title||'').trim() || (doc.passage||'').trim())
       ? `<p class="text-sm font-bold text-gray-900">${esc(doc.title||'')}
            ${doc.passage ? `<span class="text-xs font-normal text-gray-500 ml-1">${esc(doc.passage)}</span>` : ''}</p>` : '';
-    const img = doc.image
-      ? `<img src="${doc.image}" onclick="showImg(this.src)" class="w-full rounded-xl border mt-1 cursor-pointer" style="max-height:420px;object-fit:contain;background:#F9FAFB">`
-      : '';
+    const _pg = kind === 'sermon' ? pagesOf(doc) : (doc.image ? [doc.image] : []);
+    const img = _pg.map((src, i) => `
+      <div class="relative mt-1">
+        <img src="${src}" onclick="showImg(this.src)" class="w-full rounded-xl border cursor-pointer" style="max-height:420px;object-fit:contain;background:#F9FAFB">
+        ${_pg.length > 1 ? `<span class="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,.55);color:#fff">${i+1} / ${_pg.length}</span>` : ''}
+      </div>`).join('');
     const memo = (doc.memo||'').trim()
       ? `<p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 mt-2">${esc(doc.memo)}</p>` : '';
     const apply = kind === 'dqt' && (id === currentUser || canManage())
@@ -2588,7 +2787,7 @@ function renderSermon() {
   const saved = getDoc('sermon', me, sermonDate);
   const loading = saved === undefined;
   const open = canWriteSermon(sermonDate);
-  const shown = _pendingImg || (saved && saved.image) || '';
+  const pages = shownPages(saved);
 
   const chips = `<div class="card !py-2">
     <div class="scroll-table"><div class="flex gap-1.5 pb-1">
@@ -2626,21 +2825,22 @@ function renderSermon() {
               <p class="text-xs text-gray-400 mt-1">설교 노트는 <b>예배일부터 그 주 토요일까지</b> 올릴 수 있어요.</p>
             </div>`}`
       : `
-      ${shown ? `
-      <div class="relative mt-1">
-        <img src="${shown}" onclick="showImg(this.src)" class="w-full rounded-xl border cursor-pointer" style="max-height:420px;object-fit:contain;background:#F9FAFB">
+      ${pages.map((src, i) => `
+      <div class="relative mt-2">
+        <img src="${src}" onclick="showImg(this.src)" class="w-full rounded-xl border cursor-pointer" style="max-height:400px;object-fit:contain;background:#F9FAFB">
+        <span class="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,.55);color:#fff">${i+1} / ${pages.length}</span>
         <div class="absolute top-2 right-2 flex gap-1.5">
-          <button onclick="rotateImage('sermon','${sermonDate}')" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">↻ 돌리기</button>
-          <button onclick="clearImage()" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">사진 빼기</button>
+          <button onclick="rotatePage(${i})" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">↻ 돌리기</button>
+          <button onclick="removePage(${i})" style="min-height:32px" class="bg-black/60 text-white text-xs px-3 py-1 rounded-full">빼기</button>
         </div>
-        ${_pendingImg ? `<p class="text-[11px] text-amber-600 mt-1">아직 안 올렸어요 — 아래 버튼을 눌러야 저장됩니다</p>` : ''}
-      </div>` : ''}
+      </div>`).join('')}
+      ${_pendingPages !== null ? `<p class="text-[11px] text-amber-600 mt-1">아직 안 올렸어요 — 아래 버튼을 눌러야 저장됩니다</p>` : ''}
+      ${pages.length < PAGES_MAX ? `
       <label class="mt-3 flex flex-col items-center justify-center gap-1 border-2 border-dashed border-gray-300 rounded-xl py-6 cursor-pointer active:bg-gray-50">
-        <span class="text-2xl">📷</span>
-        <span class="text-sm font-bold text-gray-700">${shown ? '사진 바꾸기' : '설교 노트 사진 올리기'}</span>
-        <span class="text-[11px] text-gray-400">두 면이면 나란히 놓고 한 장으로 찍어주세요</span>
-        <input type="file" accept="image/*" class="hidden" onchange="pickImage(this)">
-      </label>
+        <span class="text-sm font-bold text-gray-700">${pages.length ? `사진 더 올리기 (${pages.length}/${PAGES_MAX})` : '설교 노트 사진 올리기'}</span>
+        <span class="text-[11px] text-gray-400">${PAGES_MAX}장까지 · 여러 장 한 번에 골라도 됩니다</span>
+        <input type="file" accept="image/*" multiple class="hidden" onchange="pickPages(this)">
+      </label>` : `<p class="text-[11px] text-gray-400 mt-2 text-center">${PAGES_MAX}장을 다 채웠어요 · 바꾸려면 빼고 다시 올리세요</p>`}
       <div class="flex gap-2 mt-3">
         <input type="text" id="sm-title" oninput="dset('sermon','${sermonDate}','title',this.value)"
           placeholder="설교 제목(선택)" value="${esc(dv('sermon', sermonDate, 'title', saved && saved.title))}" class="flex-1 border rounded-xl p-3 text-sm">
@@ -2652,7 +2852,7 @@ function renderSermon() {
         class="w-full border rounded-xl p-3 text-sm resize-none mt-2">${esc(dv('sermon', sermonDate, 'memo', saved && saved.memo))}</textarea>
       <button onclick="submitSermon('${sermonDate}')"
         class="w-full mt-3 py-4 rounded-xl font-bold text-sm ${hasContent('sermon',saved) ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'}">
-        ${hasContent('sermon',saved) ? '사진 다시 올리기' : '설교 노트 올리기'}
+        ${hasContent('sermon',saved) ? `다시 올리기${pages.length>1?` (${pages.length}장)`:''}` : `설교 노트 올리기${pages.length>1?` (${pages.length}장)`:''}`}
       </button>
       ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}
       ${hasContent('sermon', saved) ? noteBlock('sermon', me, sermonDate) : ''}`}
