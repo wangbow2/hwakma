@@ -191,6 +191,21 @@
   </div>
 </div>
 
+<!-- 새 댓글 알림 -->
+<div id="modal-newnotes" class="modal">
+  <div class="bg-white rounded-2xl w-full max-w-sm mx-4 max-h-[80vh] flex flex-col overflow-hidden">
+    <div class="p-4 border-b">
+      <p class="font-bold text-gray-900" id="newnotes-title">새 댓글</p>
+      <p class="text-xs text-gray-500 mt-0.5">읽지 않은 댓글이 있어요</p>
+    </div>
+    <div id="newnotes-body" class="p-3 overflow-y-auto flex-1 space-y-2"></div>
+    <div class="p-4 pt-2 flex gap-2 border-t">
+      <button onclick="goToNewNote()" class="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold text-sm">확인하러 가기</button>
+      <button onclick="dismissNewNotes()" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold text-sm">나중에</button>
+    </div>
+  </div>
+</div>
+
 <!-- User menu -->
 <div id="modal-user-menu" class="modal">
   <div class="bg-white rounded-2xl w-full max-w-xs mx-4">
@@ -252,7 +267,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.1';
+const APP_BUILD = '2026-09-06.2';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -465,6 +480,7 @@ let state = {
 };
 let currentUser = null;   // 로컬 전용 — 서버에 올리지 않는다
 let _editNotice = false;  // 목사님이 한 줄을 고치는 중인가
+let _replyTo = null;      // 대댓글을 쓰는 중인 댓글 — 'kind|id|date|idx'
 let currentPage = 'home';
 let qtSection = 'daily';  // 아래 메뉴의 큐티 안에서 매일 큐티 / D형 큐티를 전환한다
 let checkWeek = 0;
@@ -687,8 +703,11 @@ function doLogin() {
   document.getElementById('login-screen').style.display = 'none';
   resetDates();
   renderAll();
+  watchNotes();
 }
 function doLogout() {
+  _newNotes = [];
+  _notesWatching = false;
   currentUser = null;
   try { localStorage.removeItem('hwakma_user'); } catch (_) {}
   closeModal('modal-user-menu');
@@ -1220,8 +1239,33 @@ function renderAll() {
   document.getElementById('btn-settings').classList.toggle('hidden', !isLeader());
   document.getElementById('nav-check').classList.toggle('hidden', !canSeeCheck());
   document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
+  paintNoteDots();
   ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
      sermon: renderSermon, gallery: renderGallery, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
+}
+
+// 안 읽은 댓글이 있는 메뉴에 빨간 점을 찍는다.
+function paintNoteDots() {
+  const byNav = { qt:'nav-qt', dqt:'nav-qt', sermon:'nav-sermon' };
+  const want = {};
+  _newNotes.forEach(x => { const id = byNav[x.target]; if (id) want[id] = (want[id] || 0) + 1; });
+  ['nav-qt','nav-sermon'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    let dot = btn.querySelector('.note-dot');
+    if (want[id]) {
+      if (!dot) {
+        btn.style.position = 'relative';
+        dot = document.createElement('span');
+        dot.className = 'note-dot';
+        dot.style.cssText = 'position:absolute;top:2px;right:8px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#EF4444;color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;';
+        btn.appendChild(dot);
+      }
+      dot.textContent = want[id] > 9 ? '9+' : String(want[id]);
+    } else if (dot) {
+      dot.remove();
+    }
+  });
 }
 
 function todayRef() { return QT_SCHEDULE[iso(today0())] || ''; }
@@ -1484,37 +1528,61 @@ function noteMsgs(kind, id, date) {
 function canSeeNote(id) { return id === currentUser || canManage(); }
 function hasLeaderNote(kind, id, date) { return noteMsgs(kind, id, date).some(m => m.leader); }
 
+// 댓글 한 벌을 통째로 저장한다 — 새 댓글·대댓글·지우기가 모두 이 길로 지난다.
+function saveNoteDoc(kind, id, date, msgs, okMsg) {
+  const k = noteKey(kind, id, date);
+  const doc = { kind:'note', target:kind, studentId:id, date, msgs, updatedAt:new Date().toISOString() };
+  _docs[k] = doc;
+  renderAll();
+  if (!_FS_OK) { toast('저장했어요 (인터넷이 없어 이 기기에만)'); return; }
+  _db.collection('discipleDocs').doc(k).set(doc)
+    .then(() => { if (okMsg) toast(okMsg); })
+    .catch(e => { console.warn('댓글 저장 실패:', e); toast('저장이 안 됐어요. 잠시 뒤 다시 눌러주세요'); });
+}
+function meAsWriter(text) {
+  return { by: currentUser, name: (findUser(currentUser)||{}).name || '',
+           leader: isLeader(), text, at: new Date().toISOString() };
+}
+
 function addNote(kind, id, date) {
   if (!canSeeNote(id)) return;
   const ta = document.getElementById(`note-${kind}-${id}`);
   const text = (ta ? ta.value : '').trim();
   if (!text) { toast('내용을 적어주세요'); return; }
-  const k = noteKey(kind, id, date);
-  const msgs = noteMsgs(kind, id, date).concat([{
-    by: currentUser, name: (findUser(currentUser)||{}).name || '', leader: isLeader(),
-    text, at: new Date().toISOString()
-  }]);
-  const doc = { kind:'note', target:kind, studentId:id, date, msgs, updatedAt:new Date().toISOString() };
-  _docs[k] = doc;
   if (ta) ta.value = '';
-  renderAll();
-  if (!_FS_OK) { toast('저장했어요 (인터넷이 없어 이 기기에만)'); return; }
-  _db.collection('discipleDocs').doc(k).set(doc)
-    .then(() => toast(isLeader() ? '피드백을 남겼습니다' : '답글을 남겼어요'))
-    .catch(e => { console.warn('비밀 댓글 저장 실패:', e); toast('저장이 안 됐어요. 잠시 뒤 다시 눌러주세요'); });
+  _replyTo = null;
+  saveNoteDoc(kind, id, date, noteMsgs(kind, id, date).concat([meAsWriter(text)]),
+              isLeader() ? '피드백을 남겼습니다' : '댓글을 남겼어요');
+}
+
+// 대댓글 — 댓글 하나에 매달아 둔다. 오간 이야기가 흩어지지 않도록.
+function openReply(kind, id, date, idx) { _replyTo = `${kind}|${id}|${date}|${idx}`; renderAll(); }
+function cancelReply() { _replyTo = null; renderAll(); }
+function addReply(kind, id, date, idx) {
+  if (!canSeeNote(id)) return;
+  const ta = document.getElementById(`reply-${kind}-${id}-${idx}`);
+  const text = (ta ? ta.value : '').trim();
+  if (!text) { toast('내용을 적어주세요'); return; }
+  const msgs = noteMsgs(kind, id, date).map((m, k) => k !== idx ? m
+    : Object.assign({}, m, { replies: (Array.isArray(m.replies) ? m.replies : []).concat([meAsWriter(text)]) }));
+  _replyTo = null;
+  saveNoteDoc(kind, id, date, msgs, '답글을 남겼어요');
 }
 function removeNote(kind, id, date, idx) {
   if (!canManage()) return;
-  const k = noteKey(kind, id, date);
   const msgs = noteMsgs(kind, id, date).slice();
   msgs.splice(idx, 1);
-  const doc = { kind:'note', target:kind, studentId:id, date, msgs, updatedAt:new Date().toISOString() };
-  _docs[k] = doc;
-  renderAll();
-  if (!_FS_OK) return;
-  _db.collection('discipleDocs').doc(k).set(doc)
-    .then(() => toast('지웠습니다'))
-    .catch(e => console.warn('비밀 댓글 삭제 실패:', e));
+  saveNoteDoc(kind, id, date, msgs, '지웠습니다');
+}
+function removeReply(kind, id, date, idx, ridx) {
+  if (!canManage()) return;
+  const msgs = noteMsgs(kind, id, date).map((m, k) => {
+    if (k !== idx) return m;
+    const rs = (Array.isArray(m.replies) ? m.replies : []).slice();
+    rs.splice(ridx, 1);
+    return Object.assign({}, m, { replies: rs });
+  });
+  saveNoteDoc(kind, id, date, msgs, '지웠습니다');
 }
 
 // 낸 사람과 목사님에게만 그려 준다. 그 밖의 사람에게는 아예 없는 칸이다.
@@ -1525,26 +1593,169 @@ function noteBlock(kind, id, date) {
   const msgs = noteMsgs(kind, id, date);
   const who = (findUser(id)||{}).name || '';
   const mine = id === currentUser;
+  const when = at => at ? new Date(at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+
+  const bubble = (m, k, ridx) => {
+    const isReply = ridx !== undefined;
+    return `<div class="rounded-xl px-3 py-2 ${m.leader ? 'bg-indigo-600' : 'bg-white border'}">
+      <p class="text-sm leading-relaxed whitespace-pre-wrap ${m.leader ? 'text-white' : 'text-gray-800'}">${esc(m.text)}</p>
+      <div class="flex items-center justify-between mt-1 gap-2">
+        <p class="text-[11px] ${m.leader ? 'text-white/60' : 'text-gray-400'} truncate">${esc(m.name)}${m.leader ? ' 목사님' : ''} · ${when(m.at)}</p>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          ${!isReply ? `<button onclick="openReply('${kind}','${id}','${date}',${k})" style="min-height:24px"
+            class="text-[11px] px-1.5 font-semibold ${m.leader ? 'text-white/70' : 'text-indigo-500'}">답글</button>` : ''}
+          ${canManage() ? `<button onclick="${isReply ? `removeReply('${kind}','${id}','${date}',${k},${ridx})` : `removeNote('${kind}','${id}','${date}',${k})`}"
+            style="min-height:24px" class="text-[11px] px-1 ${m.leader ? 'text-white/60' : 'text-red-400'}">지우기</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const thread = msgs.map((m, k) => {
+    const replies = Array.isArray(m.replies) ? m.replies : [];
+    const replying = _replyTo === `${kind}|${id}|${date}|${k}`;
+    return `<div class="mb-2">
+      ${bubble(m, k)}
+      ${replies.length ? `<div class="mt-1.5 ml-4 pl-3 space-y-1.5" style="border-left:2px solid #E0DEF5">
+        ${replies.map((r, ri) => bubble(r, k, ri)).join('')}
+      </div>` : ''}
+      ${replying ? `<div class="mt-1.5 ml-4 pl-3" style="border-left:2px solid #E0DEF5">
+        <textarea id="reply-${kind}-${id}-${k}" rows="2" placeholder="${esc(m.name)}에게 답글"
+          class="w-full border rounded-xl p-2.5 text-sm resize-none"></textarea>
+        <div class="flex gap-2 mt-1.5">
+          <button onclick="addReply('${kind}','${id}','${date}',${k})" style="min-height:34px"
+            class="flex-1 py-2 rounded-xl font-bold text-xs bg-indigo-600 text-white">답글 남기기</button>
+          <button onclick="cancelReply()" style="min-height:34px"
+            class="flex-1 py-2 rounded-xl font-bold text-xs bg-gray-100 text-gray-600">취소</button>
+        </div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
   return `<div class="mt-3 rounded-xl border border-dashed border-indigo-200 p-3" style="background:#F8F7FF">
-    <p class="text-[11px] font-bold text-indigo-700">🔒 비밀 댓글 · ${mine ? '나와 목사님만 보입니다' : `${who}와 목사님만 보입니다`}</p>
+    <p class="text-[11px] font-bold text-indigo-700">비밀 댓글 · ${mine ? '나와 목사님만 보입니다' : `${who}와 목사님만 보입니다`}</p>
     ${doc === undefined ? `<p class="text-xs text-gray-400 mt-2">불러오는 중…</p>` : `
-      ${msgs.length ? `<div class="mt-2 space-y-1.5">
-        ${msgs.map((m, k) => `<div class="rounded-xl px-3 py-2 ${m.leader ? 'bg-indigo-600' : 'bg-white border'}">
-          <p class="text-sm leading-relaxed whitespace-pre-wrap ${m.leader ? 'text-white' : 'text-gray-800'}">${esc(m.text)}</p>
-          <div class="flex items-center justify-between mt-1">
-            <p class="text-[11px] ${m.leader ? 'text-white/60' : 'text-gray-400'}">${esc(m.name)}${m.leader ? ' 목사님' : ''} · ${m.at ? new Date(m.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</p>
-            ${canManage() ? `<button onclick="removeNote('${kind}','${id}','${date}',${k})" style="min-height:24px" class="text-[11px] px-1 ${m.leader ? 'text-white/60' : 'text-red-400'}">지우기</button>` : ''}
-          </div>
-        </div>`).join('')}
-      </div>` : `<p class="text-xs text-gray-400 mt-2">${isLeader() ? '아직 피드백을 달지 않았습니다.' : '아직 목사님 피드백이 없어요.'}</p>`}
+      ${msgs.length ? `<div class="mt-2">${thread}</div>`
+        : `<p class="text-xs text-gray-400 mt-2">${isLeader() ? '아직 피드백을 달지 않았습니다.' : '아직 목사님 피드백이 없어요.'}</p>`}
       <textarea id="note-${kind}-${id}" rows="2"
-        placeholder="${isLeader() ? '피드백을 적어주세요 — 이 아이만 봅니다' : '목사님께 묻고 싶은 것이나 답글'}"
+        placeholder="${isLeader() ? '피드백을 적어주세요 — 이 아이만 봅니다' : '목사님께 묻고 싶은 것이나 하고 싶은 말'}"
         class="w-full border rounded-xl p-2.5 text-sm resize-none mt-2"></textarea>
       <button onclick="addNote('${kind}','${id}','${date}')" style="min-height:38px"
         class="w-full mt-1.5 py-2 rounded-xl font-bold text-xs ${isLeader() ? 'bg-indigo-600 text-white' : 'bg-white border text-gray-700'}">
-        ${isLeader() ? '피드백 남기기' : '답글 남기기'}
+        ${isLeader() ? '피드백 남기기' : '댓글 남기기'}
       </button>`}
   </div>`;
+}
+
+// ==========================================
+// 새 댓글 알림 — 앱을 열었을 때, 그리고 열어 둔 동안 새 댓글이 달리면 알려준다.
+// (앱을 꺼 둔 사이에 오는 카톡 같은 알림은 아니다. 앱을 열면 그때 뜬다.)
+// ==========================================
+let _newNotes = [];          // 아직 안 본 댓글들
+let _notesWatching = false;
+let _notesFirstSnap = true;
+
+function seenKey() { return 'hwakma_notes_seen_' + (currentUser || ''); }
+function lastSeenNotes() {
+  try { return localStorage.getItem(seenKey()) || ''; } catch (_) { return ''; }
+}
+function markNotesSeen() {
+  try { localStorage.setItem(seenKey(), new Date().toISOString()); } catch (_) {}
+  _newNotes = [];
+}
+const NOTE_LABEL = { qt:'큐티', dqt:'D형 큐티', sermon:'설교 노트' };
+
+// 문서 하나에서 내가 아직 못 본 남의 글을 모은다(댓글과 대댓글 모두).
+function pickNewFrom(v, since) {
+  const out = [];
+  if (!v || v.kind !== 'note') return out;
+  if (!canSeeNote(v.studentId)) return out;
+  const target = v.target || 'sermon';
+  const push = (m, parent) => {
+    if (!m || m.by === currentUser) return;
+    if (!m.at || (since && m.at <= since)) return;
+    out.push({ target, studentId: v.studentId, date: v.date, name: m.name || '',
+               leader: !!m.leader, text: m.text || '', at: m.at, reply: !!parent });
+  };
+  (v.msgs || []).forEach(m => {
+    push(m, null);
+    (Array.isArray(m.replies) ? m.replies : []).forEach(r => push(r, m));
+  });
+  return out;
+}
+
+function renderNewNotes() {
+  const body = document.getElementById('newnotes-body');
+  if (!body) return;
+  document.getElementById('newnotes-title').textContent = `새 댓글 ${_newNotes.length}개`;
+  body.innerHTML = _newNotes.map(x => {
+    const who = (findUser(x.studentId) || {}).name || '';
+    return `<div class="rounded-xl border p-3">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs font-bold text-gray-800 truncate">${esc(x.name)}${x.leader ? ' 목사님' : ''}${x.reply ? ' · 답글' : ''}</p>
+        <p class="text-[11px] text-gray-400 flex-shrink-0">${new Date(x.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
+      </div>
+      <p class="text-sm text-gray-700 mt-1 leading-relaxed line-clamp-3">${esc(x.text)}</p>
+      <p class="text-[11px] text-gray-400 mt-1.5">${NOTE_LABEL[x.target] || x.target}${canManage() && who ? ` · ${who}` : ''} · ${x.date}</p>
+    </div>`;
+  }).join('');
+}
+function showNewNotes() {
+  if (!_newNotes.length) return;
+  _newNotes.sort((a,b) => a.at < b.at ? 1 : -1);
+  renderNewNotes();
+  openModal('modal-newnotes');
+}
+function dismissNewNotes() {
+  markNotesSeen();
+  closeModal('modal-newnotes');
+  renderAll();
+}
+// 가장 최근 댓글이 달린 곳으로 데려간다.
+function goToNewNote() {
+  const x = _newNotes[0];
+  markNotesSeen();
+  closeModal('modal-newnotes');
+  if (!x) { renderAll(); return; }
+  if (x.target === 'sermon') {
+    sermonDate = x.date;
+    const sl = slotOf(x.date);
+    if (sl) sermonType = sl.i === 5 ? 'fri' : 'sun';
+    navigate('sermon');
+  } else if (x.target === 'dqt') {
+    const sl = slotOf(x.date);
+    if (sl) dqtWeek = sl.n;
+    navigate('dqt');          // navigate가 D형 탭으로 맞춰 준다
+  } else {
+    qtDate = x.date;
+    qtCalMonth = x.date.slice(0,7);
+    navigate('qt');
+  }
+}
+
+// 앱이 열려 있는 동안에도 새 댓글을 바로 받아 본다.
+function watchNotes() {
+  if (!_FS_OK || _notesWatching || !currentUser) return;
+  _notesWatching = true;
+  _notesFirstSnap = true;
+  _db.collection('discipleDocs').where('kind','==','note')
+    .onSnapshot(snap => {
+      const since = lastSeenNotes();
+      const fresh = [];
+      snap.forEach(d => {
+        const v = d.data();
+        _docs[d.id] = v;                       // 화면 그릴 때 다시 부르지 않도록 담아 둔다
+        pickNewFrom(v, since).forEach(x => fresh.push(x));
+      });
+      _newNotes = fresh;
+      if (_notesFirstSnap) {
+        _notesFirstSnap = false;
+        if (_newNotes.length) showNewNotes();   // 들어오자마자 한 번
+      } else if (_newNotes.length) {
+        showNewNotes();                          // 열어 둔 사이에 새로 달리면 그때
+      }
+      renderAll();
+    }, e => { console.warn('댓글 알림 끊김:', e); _notesWatching = false; });
 }
 
 // ==========================================
@@ -1591,7 +1802,8 @@ function docView(kind, doc, id, date) {
   }).join('');
   const mins = kind === 'pray' && doc.minutes ? `<p class="text-[11px] text-gray-400 mb-1">🕯️ ${esc(doc.minutes)}분 기도했어요</p>` : '';
   const img = doc.image ? `<img src="${doc.image}" onclick="showImg(this.src)" class="w-full rounded-xl border mt-2 cursor-pointer" style="max-height:320px;object-fit:contain;background:#F9FAFB">` : '';
-  return mins + rows + img;
+  // 큐티에도 비밀 댓글을 붙인다 — 낸 사람과 목사님만 본다.
+  return mins + rows + img + (kind === 'qt' ? noteBlock('qt', id, date) : '');
 }
 
 // 인도자가 고치는 칸
@@ -1879,6 +2091,7 @@ function renderDailyQT() {
       </button>
       ${lockNote(qtDate, '큐티')}
       ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}
+      ${hasContent('qt', saved) ? noteBlock('qt', me, qtDate) : ''}
       `}
     </div>
 
@@ -2636,6 +2849,7 @@ try {
     currentUser = saved;
     document.getElementById('login-screen').style.display = 'none';
     renderAll();
+    watchNotes();
   }
 } catch (_) {}
 
