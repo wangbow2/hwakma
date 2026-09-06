@@ -267,7 +267,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.4';
+const APP_BUILD = '2026-09-06.5';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -2110,7 +2110,7 @@ function renderDailyQT() {
       <p class="text-[11px] text-gray-400 mt-2 text-center">사진을 누르면 크게 볼 수 있어요 · 성서유니온 「청소년 매일성경」</p>
     </div>
 
-    ${isLeader() ? '' : `<div class="card">
+    <div class="card">
       <div class="flex items-center justify-between mb-2"><h3 class="font-bold text-gray-800 text-sm">${dayLabel(qtDate)} 내 묵상</h3><span data-draft-status class="text-[10px] text-gray-400">입력 자동 저장</span></div>
       ${loading ? `<p class="text-sm text-gray-400 py-6 text-center">불러오는 중…</p>`
       : !open ? `
@@ -2134,7 +2134,7 @@ function renderDailyQT() {
 
     <div class="card !py-3 text-center">
       <p class="text-sm ${cntOf('qt',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 큐티 ${cntOf('qt',me,n)}일 / 7일 · ${cntOf('qt',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
-    </div>`}
+    </div>
 
     ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 그날 올린 묵상을 볼 수 있어요')}
 `;
@@ -2425,18 +2425,6 @@ function renderPray() {
       <p class="text-xs text-gray-700 leading-relaxed">기도 영적일지는 <b>친구들에게 보이지 않습니다.</b>
       나와 인도자(황영환 목사님)만 볼 수 있어요. 그러니 정직하게 적으세요.</p>
     </div>`;
-
-  if (isLeader()) {
-    el.innerHTML = `
-      ${dayStrip('pray', prayDate)}
-      <div class="card !py-3 text-center">
-        <p class="text-xs text-gray-500">${n+1}주차 · ${dayLabel(prayDate)}</p>
-        <p class="text-sm font-bold text-gray-900 mt-0.5">${esc(ref || '본문이 없는 날')}</p>
-        <p class="text-[11px] text-gray-400 mt-1">이름을 누르면 그날 일지와 비밀 댓글이 펼쳐집니다</p>
-      </div>
-      ${leaderView}`;
-    return;
-  }
 
   el.innerHTML = `
     ${rules}
