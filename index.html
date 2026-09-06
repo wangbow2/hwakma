@@ -269,7 +269,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.6';
+const APP_BUILD = '2026-09-06.7';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1276,12 +1276,14 @@ function paintNoteDots() {
 // 폰 알림 — 앱을 꺼 두어도 댓글이 달리면 알려준다.
 // 홈 화면에 추가해 둔 폰에서만 제대로 동작한다(아이폰은 반드시).
 // ==========================================
-// 파이어베이스 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서에서 만든 키.
-const VAPID_KEY = '';   // ← 여기에 넣으면 알림이 켜진다
+// 웹 푸시 키. 비워 두면 FCM이 기본 키를 쓴다 — 콘솔에서 따로 만들지 않아도 된다.
+// 나중에 우리 키를 쓰고 싶으면 콘솔에서 만들어 여기 넣으면 된다.
+const VAPID_KEY = '';
 let _messaging = null;
 
 function pushSupported() {
-  return !!(VAPID_KEY && window.firebase && firebase.messaging &&
+  return !!(window.firebase && firebase.messaging && firebase.messaging.isSupported &&
+            firebase.messaging.isSupported() &&
             'serviceWorker' in navigator && 'Notification' in window && _FS_OK);
 }
 function pushOn() {
@@ -1307,7 +1309,9 @@ async function togglePush() {
     }
     const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
     _messaging = _messaging || firebase.messaging();
-    const token = await _messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    const opts = { serviceWorkerRegistration: reg };
+    if (VAPID_KEY) opts.vapidKey = VAPID_KEY;
+    const token = await _messaging.getToken(opts);
     if (!token) { toast('알림 등록에 실패했어요'); return; }
     await _db.collection('discipleTokens').doc(currentUser).set({
       tokens: firebase.firestore.FieldValue.arrayUnion(token),
