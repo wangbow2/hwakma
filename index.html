@@ -289,7 +289,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-06.11';
+const APP_BUILD = '2026-09-06.12';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -699,6 +699,9 @@ function canManage() { return currentUser === MANAGER; }
 // 체크표는 목사님과 반장만 본다. 고치는 것은 목사님만.
 function isMonitor() { const u = findUser(currentUser); return !!(u && u.role === '반장'); }
 function canSeeCheck() { return isLeader() || isMonitor(); }
+// 출석·제출 체크는 반장도 함께 한다. 다만 아이들이 쓴 글과 댓글, 기도일지 속내용은
+// 목사님만 본다 — 반장의 몫은 '누가 냈나 안 냈나'를 보고 챙기는 데까지다.
+function canEditCheck() { return isLeader() || isMonitor(); }
 
 function fillLoginSelect() {
   const sel = document.getElementById('login-name-select');
@@ -1055,17 +1058,68 @@ const GALLERY_DEFAULTS = [
 ];
 let _galleryUploads = [], _galleryLoaded = false, _galleryTimer = null, _homeGalleryIndex = 0;
 let _galleryEditing = null, _galleryUploading = false;
+let _galleryShown = 60;                 // 목록에 한 번에 펴 놓는 장수
+const GALLERY_PAGE = 60;
+const HOME_PICK = 30;                   // 홈에서 돌리는 장수
+let _homePool = null, _homePoolKey = '';
+const _galleryFull = {};                // id → 원본. 누를 때만 받아 온다.
+
 function galleryItems() {
   return GALLERY_DEFAULTS.concat(_galleryUploads).sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
 }
+// 목록·홈에서 쓰는 그림. 미리보기가 있으면 그것만 쓴다(옛 사진은 원본으로 버틴다).
+function galleryThumbOf(x) { return (x && (x.thumb || x.image)) || ''; }
+
+// 홈은 무작위 서른 장만 돌린다. 사진이 늘어나도 홈이 무거워지지 않는다.
+function homePool() {
+  const items = galleryItems();
+  const key = items.length + '|' + (items[0] ? items[0].id : '');
+  if (!_homePool || _homePoolKey !== key) {
+    const a = items.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    _homePool = a.slice(0, HOME_PICK);
+    _homePoolKey = key;
+    _homeGalleryIndex = 0;
+  }
+  return _homePool;
+}
+
 function initGallery() {
   initGalleryComments();
   if (!_FS_OK || _galleryLoaded) return;
   _galleryLoaded = true;
   _db.collection('discipleDocs').where('kind','==','gallery').onSnapshot(snap => {
-    _galleryUploads = snap.docs.map(d => Object.assign({ id:d.id }, d.data())).filter(x => x.image && !x.deleted);
+    _galleryUploads = snap.docs.map(d => Object.assign({ id:d.id }, d.data()))
+      .filter(x => (x.thumb || x.image) && !x.deleted);
     if (currentUser) renderAll();
   }, e => { _galleryLoaded = false; console.warn('갤러리 불러오기 실패:', e); });
+}
+
+// 작은 미리보기를 만든다 — 목록은 이것만 받으므로 한참 가벼워진다.
+function makeThumb(dataUrl, cb) {
+  const img = new Image();
+  img.onerror = () => cb('');
+  img.onload = () => {
+    try {
+      const max = 420, scale = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      let q = 0.62, out = c.toDataURL('image/jpeg', q);
+      while (out.length > 30000 && q > 0.3) { q -= 0.07; out = c.toDataURL('image/jpeg', q); }
+      cb(out);
+    } catch (_) { cb(''); }
+  };
+  img.src = dataUrl;
+}
+// 원본은 사진을 눌렀을 때만 받아 온다.
+function loadGalleryFull(id, cb) {
+  if (_galleryFull[id] !== undefined) { cb(_galleryFull[id]); return; }
+  if (!_FS_OK) { cb(''); return; }
+  _db.collection('discipleDocs').doc('gfull_' + id).get()
+    .then(d => { _galleryFull[id] = (d.exists && d.data().image) || ''; cb(_galleryFull[id]); })
+    .catch(e => { console.warn('원본 불러오기 실패:', e); _galleryFull[id] = ''; cb(''); });
 }
 // ── 사진첩 댓글 ──
 // 사진 문서가 커지지 않도록 댓글은 문서 하나에 몰아 담는다.
@@ -1097,8 +1151,10 @@ function paintPhoto() {
   document.getElementById('photo-by').textContent =
     `${x.name || ''}${x.createdAt ? ' · ' + new Date(x.createdAt).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}) : ''}`;
   const list = gComments(_photoOpen);
+  const full = _galleryFull[_photoOpen];
+  if (full === undefined && !String(x.id).startsWith('default-')) loadGalleryFull(x.id, () => { if (_photoOpen === x.id) paintPhoto(); });
   document.getElementById('photo-body').innerHTML = `
-    <img src="${x.image}" onclick="showImg(this.src)" class="w-full cursor-pointer" style="max-height:46vh;object-fit:contain;background:#F3F4F6">
+    <img src="${full || galleryThumbOf(x)}" onclick="showImg(this.src)" class="w-full cursor-pointer" style="max-height:46vh;object-fit:contain;background:#F3F4F6">
     <div class="p-3">
       ${list.length ? list.map((c, i) => `
         <div class="py-2 border-b last:border-0">
@@ -1152,7 +1208,7 @@ async function uploadGallery(input) {
   toast(`${files.length}장 사진을 준비하는 중이에요…`);
   const u = findUser(currentUser) || {};
   const caption = val('gallery-caption');
-  const knownImages = new Set(_galleryUploads.map(x => x.image));
+  const knownImages = new Set();
   let uploaded = 0, skipped = 0, failed = 0;
   for (let i = 0; i < files.length; i++) {
     toast(`${files.length}장 중 ${i + 1}장 올리는 중…`);
@@ -1160,11 +1216,15 @@ async function uploadGallery(input) {
     if (!image) { failed++; continue; }
     if (knownImages.has(image)) { skipped++; continue; }
     knownImages.add(image);
-    const doc = { kind:'gallery', image, caption, studentId:currentUser, name:u.name || '',
+    const thumb = await new Promise(resolve => makeThumb(image, resolve));
+    const doc = { kind:'gallery', thumb: thumb || image, caption, studentId:currentUser, name:u.name || '',
                   createdAt:new Date(Date.now() + i).toISOString(), deleted:false };
     const id = `gallery_${Date.now()}_${currentUser}_${i}_${Math.random().toString(36).slice(2,7)}`;
     try {
+      // 원본은 따로 담는다 — 목록을 열 때 따라오지 않도록.
+      await _db.collection('discipleDocs').doc('gfull_' + id).set({ kind:'galleryfull', image, of:id });
       await _db.collection('discipleDocs').doc(id).set(doc);
+      _galleryFull[id] = image;
       _galleryUploads = _galleryUploads.filter(x => x.id !== id).concat(Object.assign({ id }, doc));
       uploaded++;
     } catch (e) { failed++; console.warn('갤러리 저장 실패:', e); }
@@ -1201,20 +1261,21 @@ function deleteGallery(id) {
 function paintHomeGallery() {
   const img = document.getElementById('home-gallery-img');
   if (!img) return;
-  const items = galleryItems();
+  const items = homePool();
   if (!items.length) return;
   _homeGalleryIndex = (_homeGalleryIndex + 1) % items.length;
-  img.src = items[_homeGalleryIndex].image;
+  img.src = galleryThumbOf(items[_homeGalleryIndex]);
   img.alt = items[_homeGalleryIndex].caption || '제자반 갤러리 사진';
   document.querySelectorAll('[data-gallery-dot]').forEach((d,i) => d.classList.toggle('bg-white', i === _homeGalleryIndex));
 }
 function startHomeGallery() {
   clearInterval(_galleryTimer);
-  if (document.getElementById('home-gallery-img') && galleryItems().length > 1) _galleryTimer = setInterval(paintHomeGallery, 1500);
+  if (document.getElementById('home-gallery-img') && homePool().length > 1) _galleryTimer = setInterval(paintHomeGallery, 2200);
 }
 function renderGallery() {
   const el = document.getElementById('page-gallery');
-  const items = galleryItems();
+  const all = galleryItems();
+  const items = all.slice(0, _galleryShown);
   el.innerHTML = `
     <div class="card">
       <h2 class="text-base font-bold text-gray-900">확~마! 갤러리</h2>
@@ -1224,11 +1285,15 @@ function renderGallery() {
         사진 여러 장 올리기
         <input type="file" accept="image/*" multiple class="hidden" onchange="uploadGallery(this)">
       </label>
+      ${canManage() && _galleryUploads.some(x => x.image && !x.thumb)
+        ? `<button onclick="migrateGallery()" class="w-full mt-2 rounded-xl bg-white border py-2.5 text-xs font-bold text-gray-600">
+             예전 사진 ${_galleryUploads.filter(x => x.image && !x.thumb).length}장 정리하기 (한 번만)</button>` : ''}
     </div>
     <div class="grid grid-cols-2 gap-3">
       ${items.map(x => `<div class="overflow-hidden rounded-2xl bg-white shadow-sm">
         <button onclick="openPhoto('${x.id}')" class="block w-full text-left relative" style="min-height:unset">
-          <img src="${x.image}" alt="${esc(x.caption || '제자반 갤러리 사진')}" class="w-full aspect-square object-cover">
+          <img src="${galleryThumbOf(x)}" alt="${esc(x.caption || '제자반 갤러리 사진')}"
+               loading="lazy" decoding="async" class="w-full aspect-square object-cover bg-gray-100">
           <span class="absolute bottom-2 right-2 text-[11px] font-bold px-2 py-0.5 rounded-full ${gComments(x.id).length?'':'opacity-70'}" style="background:rgba(0,0,0,.55);color:#fff">
             댓글 ${gComments(x.id).length}</span>
         </button>
@@ -1239,7 +1304,36 @@ function renderGallery() {
             ${x.studentId && canManageGallery(x) ? `<div class="flex justify-end gap-2 mt-1"><button onclick="startGalleryEdit('${x.id}')" style="min-height:28px" class="text-[11px] text-gray-500">수정</button><button onclick="deleteGallery('${x.id}')" style="min-height:28px" class="text-[11px] text-red-500">삭제</button></div>` : ''}`}
         </div>
       </div>`).join('')}
-    </div>`;
+    </div>
+    ${all.length > items.length ? `<button onclick="_galleryShown+=${GALLERY_PAGE};renderGallery()"
+      class="w-full rounded-xl bg-white border py-3 text-sm font-bold text-gray-700">더 보기 (${items.length} / ${all.length})</button>`
+      : (all.length > GALLERY_PAGE ? `<p class="text-[11px] text-gray-400 text-center">모두 ${all.length}장</p>` : '')}`;
+}
+
+// 옛 사진 정리 — 원본이 목록 문서에 박혀 있던 것을 미리보기와 원본으로 갈라 담는다.
+// 목사님이 한 번만 눌러 주면 된다. 사진이 많아도 갤러리가 가벼워진다.
+async function migrateGallery() {
+  if (!canManage() || !_FS_OK) return;
+  const old = _galleryUploads.filter(x => x.image && !x.thumb);
+  if (!old.length) { toast('정리할 사진이 없어요'); return; }
+  toast(`사진 ${old.length}장 정리를 시작합니다…`);
+  let done = 0, failed = 0;
+  for (let i = 0; i < old.length; i++) {
+    const x = old[i];
+    try {
+      const thumb = await new Promise(r => makeThumb(x.image, r));
+      if (!thumb) { failed++; continue; }
+      await _db.collection('discipleDocs').doc('gfull_' + x.id).set({ kind:'galleryfull', image:x.image, of:x.id });
+      await _db.collection('discipleDocs').doc(x.id).set({
+        thumb, image: firebase.firestore.FieldValue.delete()
+      }, { merge:true });
+      _galleryFull[x.id] = x.image;
+      done++;
+      if (i % 5 === 0) toast(`${old.length}장 중 ${i+1}장 정리 중…`);
+    } catch (e) { failed++; console.warn('사진 정리 실패:', x.id, e); }
+  }
+  toast(`사진 ${done}장을 정리했어요${failed ? ` · 실패 ${failed}장` : ''}`, 4000);
+  renderAll();
 }
 
 // ==========================================
@@ -1383,14 +1477,14 @@ function submitSermon(date) {
 // 체크표 직접 고치기 — 인도자만
 // ==========================================
 function cycleAtt(id, n) {
-  if (!isLeader()) return;
+  if (!canEditCheck()) return;
   const cur = attOf(id, n);
   const next = ATT_CYCLE[(ATT_CYCLE.indexOf(cur) + 1) % ATT_CYCLE.length];
   pushPatch({ att: { [weekKey(id,n)]: next } });
   renderAll();
 }
 function cycleSermon(id, n, type = 'sun') {
-  if (!isLeader()) return;
+  if (!canEditCheck()) return;
   const cur = sermonOf(id, n, type);
   const next = cur === '' ? 'O' : (cur === 'O' ? 'X' : '');
   pushPatch({ sermon: { [sermonKey(id,n,type)]: next } });
@@ -1398,12 +1492,12 @@ function cycleSermon(id, n, type = 'sun') {
 }
 // D형은 주 1회라 한 칸으로 켜고 끈다.
 function toggleDqtWeek(id, n) {
-  if (!isLeader()) return;
+  if (!canEditCheck()) return;
   pushPatch({ dqt: { [weekKey(id,n)]: dqtDone(id,n) ? '' : dateOf(n, 0) } });
   renderAll();
 }
 function toggleDot(field, id, n, i) {
-  if (!isLeader()) return;
+  if (!canEditCheck()) return;
   const arr = arrOf(field, id, n).slice();
   arr[i] = !arr[i];
   pushPatch({ [field]: { [weekKey(id,n)]: arr } });
@@ -2211,7 +2305,7 @@ function photoFeed(kind, date, heading, note) {
   }).join('');
 
   return `
-    ${!isLeader() ? '' : waiting.length ? `<div class="card !py-3 ${yet.length?'border border-amber-200 bg-amber-50':''}">
+    ${!canSeeCheck() ? '' : waiting.length ? `<div class="card !py-3 ${yet.length?'border border-amber-200 bg-amber-50':''}">
       <div class="flex items-center justify-between mb-1.5">
         <p class="text-xs font-bold ${yet.length?'text-amber-800':'text-gray-400'}">아직 안 낸 사람</p>
         <span class="text-xs font-bold ${yet.length?'text-amber-700':'text-gray-300'}">${yet.length}명</span>
@@ -2243,7 +2337,7 @@ function peopleList(kind, date, heading, note) {
   let people = state.students.concat(LEADERS.filter(l => l.id === MANAGER));
   people.forEach(x => loadDoc(kind, x.id, date));
   // 목사님 화면에서는 아직 안 낸 아이를 위로 올린다 — 누가 빠졌는지 빨리 보이도록.
-  if (isLeader()) {
+  if (canSeeCheck()) {
     people = people.slice().sort((a, b) => {
       const A = submitted(kind, a.id, date) ? 1 : 0, B = submitted(kind, b.id, date) ? 1 : 0;
       return A - B;
@@ -3074,7 +3168,7 @@ function toggleCheckRow(id) { checkOpen = checkOpen === id ? null : id; renderAl
 function renderCheck() {
   const el = document.getElementById('page-check');
   if (!canSeeCheck()) { navigate('home'); return; }
-  const n = checkWeek, wi = weekInfo(n), edit = isLeader();
+  const n = checkWeek, wi = weekInfo(n), edit = canEditCheck();
 
   const tabs = `<div class="scroll-table -mx-1 px-1"><div class="flex gap-1.5 pb-1">
     ${Array.from({length:WEEKS}, (_,i) => `<button onclick="checkWeek=${i};checkOpen=null;renderAll()"
@@ -3164,7 +3258,7 @@ function renderCheck() {
   el.innerHTML = tabs + `
     <div class="card !py-2.5 bg-gray-50 border border-gray-200">
       <p class="text-sm font-bold text-gray-900">${n+1}주차 · ${fmt(wi.sun)}(일) ~ ${fmt(wi.sat)}(토)</p>
-      <p class="text-[11px] text-gray-600 mt-0.5">${edit ? '칸을 누르면 바뀝니다 · 이름을 누르면 요일별로 펼쳐집니다' : '반장은 보기만 할 수 있습니다'}</p>
+      <p class="text-[11px] text-gray-600 mt-0.5">${edit ? '칸을 누르면 바뀝니다 · 이름을 누르면 요일별로 펼쳐집니다' : '보기만 할 수 있습니다'}</p>
     </div>
     ${missCard}
     <div class="card !p-0 overflow-hidden">
