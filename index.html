@@ -92,6 +92,12 @@
     letter-spacing:-.01em; word-break:keep-all;
   }
 
+  /* 큰 그림은 다른 창 위에 뜬다 — 제출물 창에서 눌러도 가려지지 않게 */
+  #modal-img { z-index: 1200; }
+  /* 큰 그림 창의 단추 */
+  #modal-img button { background:rgba(255,255,255,.14); color:#fff; border:0; }
+  #modal-img button:active { background:rgba(255,255,255,.28); }
+
   .timer-num { font-variant-numeric: tabular-nums; font-size:44px; font-weight:800; letter-spacing:-.02em; }
 </style>
 </head>
@@ -185,9 +191,36 @@
 </div>
 
 <!-- 지면 크게 보기 -->
-<div id="modal-img" class="modal" onclick="closeModal('modal-img')">
-  <div class="flex items-center justify-center w-full h-full p-3">
-    <img id="modal-img-src" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="max-w-full max-h-[92vh] rounded-xl object-contain shadow-2xl">
+<div id="modal-img" class="modal" style="background:rgba(0,0,0,.92)">
+  <div class="w-full h-full flex flex-col">
+    <div class="flex items-center justify-between px-3 py-2 flex-shrink-0">
+      <div class="flex items-center gap-1.5">
+        <button onclick="zoomImg(-1)" style="min-height:38px" class="w-10 h-10 rounded-full text-xl font-bold" title="축소">−</button>
+        <span id="img-zoom-label" class="text-white/70 text-xs font-bold w-12 text-center">100%</span>
+        <button onclick="zoomImg(1)" style="min-height:38px" class="w-10 h-10 rounded-full text-xl font-bold" title="확대">+</button>
+        <button onclick="setImgZoom(1)" style="min-height:38px" class="px-3 h-10 rounded-full text-xs font-bold" title="원래대로">원래대로</button>
+      </div>
+      <button onclick="closeModal('modal-img')" style="min-height:38px" class="w-10 h-10 rounded-full text-2xl leading-none">×</button>
+    </div>
+    <div id="img-wrap" class="flex-1 overflow-auto px-2 pb-3" style="-webkit-overflow-scrolling:touch">
+      <img id="modal-img-src" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+           ondblclick="zoomImg(0)" class="block mx-auto rounded-xl shadow-2xl" style="width:100%;max-height:88vh;object-fit:contain">
+    </div>
+    <p class="text-white/40 text-[11px] text-center pb-2 flex-shrink-0">두 손가락으로 넓히거나, 두 번 두드려도 커집니다</p>
+  </div>
+</div>
+
+<!-- 아이 제출물 하나를 창으로 열어 본다 -->
+<div id="modal-entry" class="modal">
+  <div class="bg-white rounded-2xl w-full max-w-lg mx-3 flex flex-col overflow-hidden" style="max-height:92vh">
+    <div class="p-3 border-b flex items-center justify-between gap-2 flex-shrink-0">
+      <div class="min-w-0">
+        <p id="entry-title" class="font-bold text-gray-900 text-sm truncate"></p>
+        <p id="entry-sub" class="text-[11px] text-gray-400 mt-0.5 truncate"></p>
+      </div>
+      <button onclick="closeEntry()" style="min-height:34px" class="text-gray-400 text-2xl px-2 leading-none flex-shrink-0">&times;</button>
+    </div>
+    <div id="entry-body" class="p-3 overflow-y-auto flex-1"></div>
   </div>
 </div>
 
@@ -289,7 +322,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-08.1';
+const APP_BUILD = '2026-09-09.3';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1045,10 +1078,50 @@ function rotateImage(kind, date) {
   });
 }
 const BLANK_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+// ── 큰 그림 확대·축소 ──
+let _imgZoom = 1;
+function paintImgZoom() {
+  const img = document.getElementById('modal-img-src');
+  const lab = document.getElementById('img-zoom-label');
+  if (!img) return;
+  img.style.width = (100 * _imgZoom) + '%';
+  img.style.maxHeight = _imgZoom > 1 ? 'none' : '88vh';
+  if (lab) lab.textContent = Math.round(_imgZoom * 100) + '%';
+}
+function setImgZoom(z) {
+  _imgZoom = Math.min(6, Math.max(1, z));
+  paintImgZoom();
+}
+// step: +1 키우기, -1 줄이기, 0 두 번 두드리기(원래대로 ↔ 2.5배)
+function zoomImg(step) {
+  if (step === 0) { setImgZoom(_imgZoom > 1.05 ? 1 : 2.5); return; }
+  setImgZoom(step > 0 ? _imgZoom * 1.4 : _imgZoom / 1.4);
+}
 function showImg(src) {
   document.getElementById('modal-img-src').src = src || BLANK_IMG;
+  _imgZoom = 1; paintImgZoom();
+  const w = document.getElementById('img-wrap');
+  if (w) { w.scrollTop = 0; w.scrollLeft = 0; }
   openModal('modal-img');
 }
+// 두 손가락으로 넓히고 좁히기
+(function () {
+  let base = 0, startZoom = 1;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  document.addEventListener('touchstart', e => {
+    const m = document.getElementById('modal-img');
+    if (!m || !m.classList.contains('open') || e.touches.length !== 2) return;
+    base = dist(e.touches); startZoom = _imgZoom;
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    const m = document.getElementById('modal-img');
+    if (!m || !m.classList.contains('open') || e.touches.length !== 2 || !base) return;
+    e.preventDefault();
+    setImgZoom(startZoom * (dist(e.touches) / base));
+  }, { passive: false });
+  document.addEventListener('touchend', () => { base = 0; }, { passive: true });
+})();
+
 
 // ==========================================
 // 갤러리 — 기본 사진 + 반원들이 올린 사진
@@ -1122,6 +1195,50 @@ function loadGalleryFull(id, cb) {
     .then(d => { _galleryFull[id] = (d.exists && d.data().image) || ''; cb(_galleryFull[id]); })
     .catch(e => { console.warn('원본 불러오기 실패:', e); _galleryFull[id] = ''; cb(''); });
 }
+// ── 아이 제출물 창 ──
+// 목록에서 이름을 누르면 그 아이 것만 창으로 뜬다. 아래로 길게 늘어놓지 않아
+// 열한 명을 훑기가 수월하고, 사진도 크게 본다.
+let _entryOpen = null;   // { kind, id, date }
+function openEntry(kind, id, date) {
+  _entryOpen = { kind, id, date };
+  _replyTo = null; _editingDoc = null; _delArm = null;
+  paintEntry();
+  openModal('modal-entry');
+}
+function closeEntry() {
+  _entryOpen = null;
+  _replyTo = null; _editingDoc = null; _delArm = null;
+  closeModal('modal-entry');
+  renderAll();
+}
+function paintEntry() {
+  if (!_entryOpen) return;
+  const { kind, id, date } = _entryOpen;
+  const u = findUser(id) || {};
+  const doc = getDoc(kind, id, date);
+  const editing = _editingDoc === kind + '_' + id;
+  document.getElementById('entry-title').textContent =
+    `${u.name || ''}${u.role ? ' · ' + u.role : ''}`;
+  document.getElementById('entry-sub').textContent =
+    `${KINDS[kind] ? KINDS[kind].label : kind} · ${dayLabel(date)}` +
+    (doc && doc.updatedAt ? ` · ${new Date(doc.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}` : '');
+  document.getElementById('entry-body').innerHTML =
+    doc === undefined ? `<p class="text-sm text-gray-400 py-8 text-center">불러오는 중…</p>`
+    : !hasContent(kind, doc) ? `<p class="text-sm text-gray-400 py-8 text-center">아직 올리지 않았어요</p>`
+    : `${editing ? docEditForm(kind, id, date) : docView(kind, doc, id, date)}
+       ${!editing && canManage() ? (_delArm === kind + '_' + id ? `
+         <div class="flex items-center gap-2 mt-3">
+           <span class="text-xs text-red-600 font-semibold flex-1">${u.name} ${KINDS[kind].label}을 지울까요?</span>
+           <button onclick="doDelete('${kind}','${id}','${date}')" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-bold bg-red-600 text-white">지웁니다</button>
+           <button onclick="cancelDelete()" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-gray-100 text-gray-600">그만</button>
+         </div>` : `
+         <div class="flex gap-2 mt-3">
+           <button onclick="_editingDoc='${kind}_${id}';_delArm=null;paintEntry()" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-white border text-gray-600">글 고치기</button>
+           <button onclick="armDelete('${kind}','${id}')" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-white border text-red-500">지우기</button>
+         </div>`) : ''}
+       ${doc.editedBy ? `<p class="text-[11px] text-gray-400 mt-2">${esc(doc.editedBy)} 목사님이 손댄 기록이 있어요</p>` : ''}`;
+}
+
 // ── 사진첩 댓글 ──
 // 사진 문서가 커지지 않도록 댓글은 문서 하나에 몰아 담는다.
 // 기본 사진(파일로 박아 둔 것)에도 똑같이 달 수 있다.
@@ -1533,6 +1650,7 @@ function renderAll() {
   document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
   paintNoteDots();
   paintPushBtn();
+  if (_entryOpen && !/TEXTAREA|INPUT/.test((document.activeElement||{}).tagName || '')) paintEntry();
   ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
      sermon: renderSermon, gallery: renderGallery, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
 }
@@ -1644,10 +1762,12 @@ try {
 function showLocalNote(x) {
   sayHwakma();
   if (!pushSupported() || Notification.permission !== 'granted' || !pushOn()) return;
-  const title = x.leader ? `${x.name || '목사님'}이 댓글을 남겼어요`
-                         : `${x.name || '새 댓글'} · ${NOTE_LABEL[x.target] || ''}`.trim();
+  const title = x.emoji
+    ? `${x.name || '누군가'}${x.leader ? ' 목사님' : ''}이 ${x.text} 눌렀어요`
+    : (x.leader ? `${x.name || '목사님'}이 댓글을 남겼어요`
+                : `${x.name || '새 댓글'} · ${NOTE_LABEL[x.target] || ''}`.trim());
   const opts = {
-    body: String(x.text || '').slice(0, 120),
+    body: x.emoji ? (NOTE_LABEL[x.target] || '') : String(x.text || '').slice(0, 120),
     icon: './icons/icon-192x192.png',
     badge: './icons/icon-96x96.png',
     tag: 'hwakma-note',
@@ -1923,7 +2043,12 @@ function noteMsgs(kind, id, date) {
   return d && Array.isArray(d.msgs) ? d.msgs : [];
 }
 function canSeeNote(id) { return id === currentUser || canManage(); }
-function hasLeaderNote(kind, id, date) { return noteMsgs(kind, id, date).some(m => m.leader); }
+// 목사님이 이모지 하나만 눌러도 '봤다'는 뜻이므로 피드백으로 친다.
+function hasLeaderNote(kind, id, date) {
+  if (noteMsgs(kind, id, date).some(m => m.leader)) return true;
+  const r = noteReacts(kind, id, date);
+  return Object.keys(r).some(e => (r[e] || []).some(u => LEADERS.some(l => l.id === u)));
+}
 
 // 댓글 한 벌을 통째로 저장한다 — 새 댓글·대댓글·지우기가 모두 이 길로 지난다.
 function saveNoteDoc(kind, id, date, patch, okMsg) {
@@ -1932,7 +2057,8 @@ function saveNoteDoc(kind, id, date, patch, okMsg) {
   const doc = Object.assign(
     { kind:'note', target:kind, studentId:id, date,
       msgs: Array.isArray(prev.msgs) ? prev.msgs : [],
-      reacts: prev.reacts || {} },
+      reacts: prev.reacts || {},
+      reactLog: Array.isArray(prev.reactLog) ? prev.reactLog : [] },
     patch, { updatedAt:new Date().toISOString() });
   _docs[k] = doc;
   renderAll();
@@ -1954,9 +2080,15 @@ function toggleReact(kind, id, date, emoji) {
   Object.keys(cur).forEach(k => { reacts[k] = Array.isArray(cur[k]) ? cur[k].slice() : []; });
   const list = reacts[emoji] || (reacts[emoji] = []);
   const i = list.indexOf(currentUser);
-  if (i >= 0) list.splice(i, 1); else list.push(currentUser);
+  const on = i < 0;
+  if (on) list.push(currentUser); else list.splice(i, 1);
   if (!list.length) delete reacts[emoji];
-  saveNoteDoc(kind, id, date, { reacts }, '');
+  // 켤 때만 기록을 남긴다 — 이 기록을 보고 알림이 나간다. 뒤에서 쉰 개만 지닌다.
+  const prev = getNote(kind, id, date) || {};
+  const log = (Array.isArray(prev.reactLog) ? prev.reactLog : []).slice(-49);
+  if (on) log.push({ by: currentUser, name: (findUser(currentUser)||{}).name || '',
+                     leader: isLeader(), emoji, at: new Date().toISOString() });
+  saveNoteDoc(kind, id, date, { reacts, reactLog: log }, '');
 }
 function reactRow(kind, id, date) {
   const r = noteReacts(kind, id, date);
@@ -2116,6 +2248,13 @@ function pickNewFrom(v, since) {
     push(m, null);
     (Array.isArray(m.replies) ? m.replies : []).forEach(r => push(r, m));
   });
+  // 이모지도 알린다 — 한 글자라도 건넸으면 상대는 알아야 한다.
+  (Array.isArray(v.reactLog) ? v.reactLog : []).forEach(r => {
+    if (!r || r.by === currentUser) return;
+    if (!r.at || (since && r.at <= since)) return;
+    out.push({ target, studentId: v.studentId, date: v.date, name: r.name || '',
+               leader: !!r.leader, text: r.emoji || '', at: r.at, emoji: true });
+  });
   return out;
 }
 
@@ -2127,10 +2266,10 @@ function renderNewNotes() {
     const who = (findUser(x.studentId) || {}).name || '';
     return `<div class="rounded-xl border p-3">
       <div class="flex items-center justify-between gap-2">
-        <p class="text-xs font-bold text-gray-800 truncate">${esc(x.name)}${x.leader ? ' 목사님' : ''}${x.reply ? ' · 답글' : ''}</p>
+        <p class="text-xs font-bold text-gray-800 truncate">${esc(x.name)}${x.leader ? ' 목사님' : ''}${x.reply ? ' · 답글' : ''}${x.emoji ? ' · 이모지' : ''}</p>
         <p class="text-[11px] text-gray-400 flex-shrink-0">${new Date(x.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
       </div>
-      <p class="text-sm text-gray-700 mt-1 leading-relaxed line-clamp-3">${esc(x.text)}</p>
+      <p class="${x.emoji ? 'text-2xl' : 'text-sm'} text-gray-700 mt-1 leading-relaxed line-clamp-3">${esc(x.text)}</p>
       <p class="text-[11px] text-gray-400 mt-1.5">${NOTE_LABEL[x.target] || x.target}${canManage() && who ? ` · ${who}` : ''} · ${x.date}</p>
     </div>`;
   }).join('');
@@ -2311,13 +2450,11 @@ function photoFeed(kind, date, heading, note) {
   // 열한 명 사진을 다 펼쳐 두면 화면이 너무 길어져 확인이 힘들다.
   const rows = done.map(({ s, doc }) => {
     const me = s.id === currentUser;
-    const open = openPerson[kind] === s.id;
-    const editing = _editingDoc === kind + '_' + s.id;
     const noFb = canManage() && !hasLeaderNote(kind, s.id, date);
     const cnt = noteMsgs(kind, s.id, date).length;
     const when = doc.updatedAt ? new Date(doc.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
     return `<div class="border-b last:border-0">
-      <div onclick="openPerson['${kind}'] = openPerson['${kind}']==='${s.id}' ? null : '${s.id}'; _editingDoc=null; _delArm=null; _replyTo=null; renderAll()"
+      <div onclick="openEntry('${kind}','${s.id}','${date}')"
            class="flex items-center gap-2.5 py-2 cursor-pointer">
         ${!usesPhoto ? '' : doc.image
             ? `<img src="${doc.image}" class="w-11 h-11 rounded-lg object-cover border flex-shrink-0" style="background:#F9FAFB">`
@@ -2331,22 +2468,8 @@ function photoFeed(kind, date, heading, note) {
           </div>
           <p class="text-[11px] text-gray-400 mt-0.5 truncate">${when}${cnt ? ` · 댓글 ${cnt}` : ''}${docPreview(kind, doc) ? ` · ${esc(docPreview(kind, doc))}` : ''}</p>
         </div>
-        <span class="text-gray-300 text-xs flex-shrink-0">${open?'▲':'▼'}</span>
+        <span class="text-gray-300 text-lg flex-shrink-0">›</span>
       </div>
-      ${open ? `<div class="pb-3">
-        ${editing ? docEditForm(kind, s.id, date) : docView(kind, doc, s.id, date)}
-        ${!editing && canManage() ? (_delArm === kind + '_' + s.id ? `
-          <div class="flex items-center gap-2 mt-2">
-            <span class="text-xs text-red-600 font-semibold flex-1">${s.name} ${KINDS[kind].label}을 지울까요?</span>
-            <button onclick="doDelete('${kind}','${s.id}','${date}')" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-bold bg-red-600 text-white">지웁니다</button>
-            <button onclick="cancelDelete()" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-gray-100 text-gray-600">그만</button>
-          </div>` : `
-          <div class="flex gap-2 mt-2">
-            <button onclick="_editingDoc='${kind}_${s.id}';_delArm=null;renderAll()" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-white border text-gray-600">메모 고치기</button>
-            <button onclick="armDelete('${kind}','${s.id}')" style="min-height:32px" class="text-xs px-3 py-1.5 rounded-full font-semibold bg-white border text-red-500">지우기</button>
-          </div>`) : ''}
-        ${doc.editedBy ? `<p class="text-[11px] text-gray-400 mt-1">${esc(doc.editedBy)} 목사님이 손댄 기록이 있어요</p>` : ''}
-      </div>` : ''}
     </div>`;
   }).join('');
 
@@ -2371,7 +2494,7 @@ function photoFeed(kind, date, heading, note) {
       ${needFeedback.length ? `<p class="text-[11px] text-red-600 font-semibold mt-1.5">피드백 없음 — ${needFeedback.join(' · ')}</p>` : ''}
       ${rows ? `<div class="mt-1">${rows}</div>`
              : `<p class="text-sm text-gray-400 text-center py-6">아직 올라온 것이 없어요</p>`}
-      ${rows ? `<p class="text-[11px] text-gray-400 mt-2 text-center">이름을 누르면 사진과 댓글이 펼쳐집니다</p>` : ''}
+      ${rows ? `<p class="text-[11px] text-gray-400 mt-2 text-center">이름을 누르면 창이 열립니다</p>` : ''}
     </div>`;
 }
 
