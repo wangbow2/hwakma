@@ -322,7 +322,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-10.1';
+const APP_BUILD = '2026-09-11.1';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -2436,7 +2436,8 @@ function docPreview(kind, doc) {
 }
 
 function photoFeed(kind, date, heading, note) {
-  const people = state.students.concat(LEADERS.filter(l => l.id === MANAGER && l.id !== currentUser));
+  let people = state.students.concat(LEADERS.filter(l => l.id === MANAGER && l.id !== currentUser));
+  if (kind === 'qt' && qtFeedFilter) people = people.filter(x => x.id === qtFeedFilter);
   people.forEach(s => loadDoc(kind, s.id, date));
   if (canManage()) people.forEach(s => loadNote(kind, s.id, date));
 
@@ -2580,6 +2581,41 @@ function imageBox(kind, date, saved) {
     </label>`;
 }
 
+// 이번 주 큐티 횟수에 붙는 등급. LADI 앱에서 쓰던 것을 그대로 옮겼다.
+// 0회부터 빵 · 새싹 · 잎 · 나무 · 체크 · 금메달 · 트로피 · 왕관.
+function qtMedal(count) {
+  return ['🍞','🌱','🌿','🌳','✅','🥇','🏆','👑'][Math.min(Math.max(count, 0), 7)];
+}
+let qtFeedFilter = null;   // 이름을 누르면 그 아이 것만 본다
+
+// 이번 주 큐티를 몇 번 했는지에 따라 줄을 세운다. 많이 한 줄이 위로 온다.
+function qtMedalHeader(date) {
+  const sl = slotOf(date);
+  if (!sl) return '';
+  const n = sl.n;
+  const people = state.students.concat(LEADERS.filter(l => l.id === MANAGER));
+  const byCount = {};
+  people.forEach(x => {
+    const c = cntOf('qt', x.id, n);
+    (byCount[c] = byCount[c] || []).push(x);
+  });
+  const rows = Object.keys(byCount).map(Number).sort((a, b) => b - a).map(c => `
+    <div class="flex items-center gap-1.5 flex-wrap py-1">
+      <span class="text-xs font-bold text-gray-700 flex-shrink-0 w-14">${c}회 ${qtMedal(c)}</span>
+      ${byCount[c].map(x => `<button onclick="qtFeedFilter = qtFeedFilter==='${x.id}' ? null : '${x.id}'; renderQT()"
+        style="min-height:unset;line-height:1.5"
+        class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full font-semibold ${qtFeedFilter===x.id?'bg-gray-900 text-white':'bg-gray-100 text-gray-600'}">${x.name}</button>`).join('')}
+    </div>`).join('');
+  return `<div class="card !py-3">
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="font-bold text-gray-800 text-sm">${n+1}주차 큐티 등급</h3>
+      ${qtFeedFilter ? `<button onclick="qtFeedFilter=null;renderQT()" style="min-height:unset" class="text-[11px] font-semibold text-gray-500 underline">전체 보기</button>` : ''}
+    </div>
+    ${rows}
+    <p class="text-[11px] text-gray-400 mt-1">이름을 누르면 그 사람 것만 봅니다 · 7회면 👑</p>
+  </div>`;
+}
+
 // 큐티를 지금까지 몇 번 했는가.
 // 아이에게는 내 것만, 목사님과 반장에게는 반 전체를 적은 쪽부터 세워 보여준다.
 function qtTallyCard(me) {
@@ -2607,11 +2643,11 @@ function qtTallyCard(me) {
   const rows = state.students
     .map(x => ({ x, t: totalOf(x.id), week: cntOf('qt', x.id, currentWeek()) }))
     .sort((a, b) => a.t.qt - b.t.qt || a.x.name.localeCompare(b.x.name));
-  return `<div class="card !p-0 overflow-hidden">
-    <div class="px-3 py-2.5 border-b flex items-center justify-between">
-      <h3 class="font-bold text-gray-800 text-sm">큐티 횟수</h3>
+  return `<details class="card !p-0 overflow-hidden">
+    <summary class="px-3 py-2.5 flex items-center justify-between cursor-pointer select-none">
+      <h3 class="font-bold text-gray-800 text-sm">누적 횟수 보기</h3>
       <span class="text-[11px] text-gray-400">시작한 지 ${days}일</span>
-    </div>
+    </summary>
     <table class="w-full">
       <thead class="bg-gray-50 border-b">
         <tr>
@@ -2637,7 +2673,7 @@ function qtTallyCard(me) {
       </tbody>
     </table>
     <p class="text-[11px] text-gray-400 px-3 py-2">적게 한 아이가 위로 옵니다 · 누적은 시작한 날부터 오늘까지 센 것입니다</p>
-  </div>`;
+  </details>`;
 }
 
 function renderDailyQT() {
@@ -2773,7 +2809,8 @@ function renderDailyQT() {
     </div>
     ${qtTallyCard(me)}
 
-    ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 그날 올린 묵상을 볼 수 있어요')}
+    ${qtMedalHeader(qtDate)}
+    ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 창이 열립니다')}
 `;
 }
 
