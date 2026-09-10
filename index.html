@@ -322,7 +322,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-09.3';
+const APP_BUILD = '2026-09-10.1';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -707,6 +707,13 @@ function weekSummary(id, n) {
            qt: cntOf('qt',id,n), dqt: dqtDone(id,n), pray: cntOf('pray',id,n) };
 }
 // 제자반 전체 기간 합계
+// 제자반이 시작된 뒤 오늘까지 흘러온 날수. '몇 번 할 수 있었는가'의 잣대다.
+function daysSoFar() {
+  const t = today0(), st = parseDate(startDate());
+  if (t < st) return 0;
+  return Math.min(WEEKS * 7, Math.round((t - st) / 86400000) + 1);
+}
+
 function totalOf(id) {
   const t = { 출석:0, 지각:0, 무단지각:0, 결석:0, 무단결석:0, qt:0, dqt:0, pray:0, sermon:0, sermonFri:0, sermonSun:0, 주차:0 };
   for (let n = 0; n < WEEKS; n++) {
@@ -2573,6 +2580,66 @@ function imageBox(kind, date, saved) {
     </label>`;
 }
 
+// 큐티를 지금까지 몇 번 했는가.
+// 아이에게는 내 것만, 목사님과 반장에게는 반 전체를 적은 쪽부터 세워 보여준다.
+function qtTallyCard(me) {
+  const days = daysSoFar();
+  if (!days) return '';
+
+  if (!canSeeCheck()) {
+    const t = totalOf(me);
+    const pct = Math.round(t.qt / days * 100);
+    return `<div class="card">
+      <div class="flex items-end justify-between">
+        <div>
+          <p class="text-[11px] text-gray-500 font-semibold">지금까지 한 큐티</p>
+          <p class="text-3xl font-bold text-gray-900 mt-0.5">${t.qt}<span class="text-base text-gray-400 font-semibold">일</span></p>
+        </div>
+        <p class="text-xs text-gray-400 mb-1">시작한 지 ${days}일 · ${pct}%</p>
+      </div>
+      <div class="h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
+        <div class="h-full ${pct>=70?'bg-green-500':pct>=40?'bg-amber-400':'bg-gray-300'}" style="width:${Math.min(100,pct)}%"></div>
+      </div>
+      <p class="text-[11px] text-gray-400 mt-2">하루 빠졌다고 그만두지 말고 오늘 것을 하면 됩니다.</p>
+    </div>`;
+  }
+
+  const rows = state.students
+    .map(x => ({ x, t: totalOf(x.id), week: cntOf('qt', x.id, currentWeek()) }))
+    .sort((a, b) => a.t.qt - b.t.qt || a.x.name.localeCompare(b.x.name));
+  return `<div class="card !p-0 overflow-hidden">
+    <div class="px-3 py-2.5 border-b flex items-center justify-between">
+      <h3 class="font-bold text-gray-800 text-sm">큐티 횟수</h3>
+      <span class="text-[11px] text-gray-400">시작한 지 ${days}일</span>
+    </div>
+    <table class="w-full">
+      <thead class="bg-gray-50 border-b">
+        <tr>
+          <th class="px-3 py-1.5 text-[11px] font-bold text-gray-500 text-left">이름</th>
+          <th class="px-1 py-1.5 text-[11px] font-bold text-gray-500">이번 주</th>
+          <th class="px-1 py-1.5 text-[11px] font-bold text-gray-500">누적</th>
+          <th class="px-1 py-1.5 text-[11px] font-bold text-gray-500">D형</th>
+          <th class="px-1 py-1.5 text-[11px] font-bold text-gray-500">기도</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(({ x, t, week }) => {
+          const pct = Math.round(t.qt / days * 100);
+          const tone = pct >= 70 ? 'text-green-700' : pct >= 40 ? 'text-amber-700' : 'text-red-600';
+          return `<tr class="border-b last:border-0">
+            <td class="px-3 py-2 text-xs font-bold text-gray-900 whitespace-nowrap">${x.name}${x.role?`<span class="text-[9px] text-gray-400 ml-0.5">${x.role}</span>`:''}</td>
+            <td class="px-1 py-2 text-center text-xs ${week>=4?'text-blue-700 font-bold':'text-gray-500'}">${week}<span class="text-gray-300">/7</span></td>
+            <td class="px-1 py-2 text-center"><span class="text-sm font-bold ${tone}">${t.qt}</span><span class="text-[10px] text-gray-400">/${days}</span></td>
+            <td class="px-1 py-2 text-center text-xs ${t.dqt?'text-gray-700':'text-gray-300'}">${t.dqt}</td>
+            <td class="px-1 py-2 text-center text-xs ${t.pray?'text-gray-700':'text-gray-300'}">${t.pray}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    <p class="text-[11px] text-gray-400 px-3 py-2">적게 한 아이가 위로 옵니다 · 누적은 시작한 날부터 오늘까지 센 것입니다</p>
+  </div>`;
+}
+
 function renderDailyQT() {
   const el = document.getElementById('qt-daily');
   if (!slotOf(qtDate)) qtDate = dateOf(currentWeek(), 0);
@@ -2704,6 +2771,7 @@ function renderDailyQT() {
     <div class="card !py-3 text-center">
       <p class="text-sm ${cntOf('qt',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 큐티 ${cntOf('qt',me,n)}일 / 7일 · ${cntOf('qt',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
     </div>
+    ${qtTallyCard(me)}
 
     ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 그날 올린 묵상을 볼 수 있어요')}
 `;
