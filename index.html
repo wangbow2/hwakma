@@ -322,7 +322,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-11.1';
+const APP_BUILD = '2026-09-11.2';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -2437,7 +2437,7 @@ function docPreview(kind, doc) {
 
 function photoFeed(kind, date, heading, note) {
   let people = state.students.concat(LEADERS.filter(l => l.id === MANAGER && l.id !== currentUser));
-  if (kind === 'qt' && qtFeedFilter) people = people.filter(x => x.id === qtFeedFilter);
+  if (feedFilter[kind]) people = people.filter(x => x.id === feedFilter[kind]);
   people.forEach(s => loadDoc(kind, s.id, date));
   if (canManage()) people.forEach(s => loadNote(kind, s.id, date));
 
@@ -2586,33 +2586,39 @@ function imageBox(kind, date, saved) {
 function qtMedal(count) {
   return ['🍞','🌱','🌿','🌳','✅','🥇','🏆','👑'][Math.min(Math.max(count, 0), 7)];
 }
-let qtFeedFilter = null;   // 이름을 누르면 그 아이 것만 본다
+// 이름을 누르면 그 아이 것만 본다. 큐티·기도가 따로 기억한다.
+const feedFilter = { qt: null, pray: null };
+function setFeedFilter(kind, id) {
+  feedFilter[kind] = feedFilter[kind] === id ? null : id;
+  if (kind === 'qt') renderQT(); else renderPray();
+}
 
-// 이번 주 큐티를 몇 번 했는지에 따라 줄을 세운다. 많이 한 줄이 위로 온다.
-function qtMedalHeader(date) {
+// 이번 주에 몇 번 했는지에 따라 줄을 세운다. 많이 한 줄이 위로 온다.
+function medalHeader(kind, date, label) {
   const sl = slotOf(date);
   if (!sl) return '';
   const n = sl.n;
   const people = state.students.concat(LEADERS.filter(l => l.id === MANAGER));
   const byCount = {};
   people.forEach(x => {
-    const c = cntOf('qt', x.id, n);
+    const c = cntOf(kind, x.id, n);
     (byCount[c] = byCount[c] || []).push(x);
   });
+  const on = feedFilter[kind];
   const rows = Object.keys(byCount).map(Number).sort((a, b) => b - a).map(c => `
     <div class="flex items-center gap-1.5 flex-wrap py-1">
       <span class="text-xs font-bold text-gray-700 flex-shrink-0 w-14">${c}회 ${qtMedal(c)}</span>
-      ${byCount[c].map(x => `<button onclick="qtFeedFilter = qtFeedFilter==='${x.id}' ? null : '${x.id}'; renderQT()"
+      ${byCount[c].map(x => `<button onclick="setFeedFilter('${kind}','${x.id}')"
         style="min-height:unset;line-height:1.5"
-        class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full font-semibold ${qtFeedFilter===x.id?'bg-gray-900 text-white':'bg-gray-100 text-gray-600'}">${x.name}</button>`).join('')}
+        class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full font-semibold ${on===x.id?'bg-gray-900 text-white':'bg-gray-100 text-gray-600'}">${x.name}</button>`).join('')}
     </div>`).join('');
   return `<div class="card !py-3">
     <div class="flex items-center justify-between mb-1">
-      <h3 class="font-bold text-gray-800 text-sm">${n+1}주차 큐티 등급</h3>
-      ${qtFeedFilter ? `<button onclick="qtFeedFilter=null;renderQT()" style="min-height:unset" class="text-[11px] font-semibold text-gray-500 underline">전체 보기</button>` : ''}
+      <h3 class="font-bold text-gray-800 text-sm">${n+1}주차 ${label} 등급</h3>
+      ${on ? `<button onclick="setFeedFilter('${kind}','${on}')" style="min-height:unset" class="text-[11px] font-semibold text-gray-500 underline">전체 보기</button>` : ''}
     </div>
     ${rows}
-    <p class="text-[11px] text-gray-400 mt-1">이름을 누르면 그 사람 것만 봅니다 · 7회면 👑</p>
+    <p class="text-[11px] text-gray-400 mt-1">7회면 👑${canSeeCheck() ? ' · 이름을 누르면 그 사람 것만 봅니다' : ''}</p>
   </div>`;
 }
 
@@ -2809,7 +2815,7 @@ function renderDailyQT() {
     </div>
     ${qtTallyCard(me)}
 
-    ${qtMedalHeader(qtDate)}
+    ${medalHeader('qt', qtDate, '큐티')}
     ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 창이 열립니다')}
 `;
 }
@@ -3158,6 +3164,7 @@ function renderPray() {
       ${saved && saved.updatedAt ? `<p class="text-[11px] text-gray-400 mt-2 text-center">${new Date(saved.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}에 올렸어요</p>` : ''}
       ${hasContent('pray', saved) ? noteBlock('pray', me, prayDate) : ''}`}
     </div>
+    ${medalHeader('pray', prayDate, '기도일지')}
     <div class="card !py-3 text-center">
       <p class="text-sm ${cntOf('pray',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 기도일지 ${cntOf('pray',me,n)}일 / 7일 · ${cntOf('pray',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
     </div>
