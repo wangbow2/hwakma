@@ -322,7 +322,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-11.2';
+const APP_BUILD = '2026-09-11.3';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -2444,8 +2444,10 @@ function photoFeed(kind, date, heading, note) {
   const done = [], waiting = [];
   people.forEach(s => {
     const raw = getDoc(kind, s.id, date);
-    if (raw === undefined) { waiting.push({ s, loading:true }); return; }
-    (hasContent(kind, raw) ? done : waiting).push({ s, doc: raw });
+    const isKid = state.students.some(x => x.id === s.id);
+    if (raw === undefined) { if (isKid) waiting.push({ s, loading:true }); return; }
+    if (hasContent(kind, raw)) done.push({ s, doc: raw });
+    else if (isKid) waiting.push({ s, doc: raw });   // 목사님은 챙길 명단에 넣지 않는다
   });
   done.sort((a,b) => String(a.doc.updatedAt||'').localeCompare(String(b.doc.updatedAt||'')));
 
@@ -2598,7 +2600,7 @@ function medalHeader(kind, date, label) {
   const sl = slotOf(date);
   if (!sl) return '';
   const n = sl.n;
-  const people = state.students.concat(LEADERS.filter(l => l.id === MANAGER));
+  const people = state.students;   // 등급은 아이들끼리. 목사님은 빼 둔다.
   const byCount = {};
   people.forEach(x => {
     const c = cntOf(kind, x.id, n);
