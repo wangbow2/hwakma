@@ -198,7 +198,8 @@
         <button onclick="zoomImg(-1)" style="min-height:38px" class="w-10 h-10 rounded-full text-xl font-bold" title="축소">−</button>
         <span id="img-zoom-label" class="text-white/70 text-xs font-bold w-12 text-center">100%</span>
         <button onclick="zoomImg(1)" style="min-height:38px" class="w-10 h-10 rounded-full text-xl font-bold" title="확대">+</button>
-        <button onclick="setImgZoom(1)" style="min-height:38px" class="px-3 h-10 rounded-full text-xs font-bold" title="원래대로">원래대로</button>
+        <button onclick="turnImg()" style="min-height:38px" class="w-10 h-10 rounded-full text-base font-bold" title="돌려 보기">↻</button>
+        <button onclick="setImgZoom(1);_imgTurn=0;paintImgZoom()" style="min-height:38px" class="px-3 h-10 rounded-full text-xs font-bold" title="원래대로">원래대로</button>
       </div>
       <button onclick="closeModal('modal-img')" style="min-height:38px" class="w-10 h-10 rounded-full text-2xl leading-none">×</button>
     </div>
@@ -322,7 +323,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-11.3';
+const APP_BUILD = '2026-09-15.1';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1086,15 +1087,20 @@ function rotateImage(kind, date) {
 }
 const BLANK_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 // ── 큰 그림 확대·축소 ──
-let _imgZoom = 1;
+let _imgZoom = 1, _imgTurn = 0;
 function paintImgZoom() {
   const img = document.getElementById('modal-img-src');
   const lab = document.getElementById('img-zoom-label');
   if (!img) return;
+  const sideways = _imgTurn % 180 !== 0;
   img.style.width = (100 * _imgZoom) + '%';
-  img.style.maxHeight = _imgZoom > 1 ? 'none' : '88vh';
+  img.style.maxHeight = (_imgZoom > 1 || sideways) ? 'none' : '88vh';
+  img.style.transform = _imgTurn ? `rotate(${_imgTurn}deg)` : '';
+  img.style.transformOrigin = 'center center';
   if (lab) lab.textContent = Math.round(_imgZoom * 100) + '%';
 }
+// 눈으로만 돌려 본다 — 올라간 사진은 그대로 둔다.
+function turnImg() { _imgTurn = (_imgTurn + 90) % 360; paintImgZoom(); }
 function setImgZoom(z) {
   _imgZoom = Math.min(6, Math.max(1, z));
   paintImgZoom();
@@ -1106,7 +1112,7 @@ function zoomImg(step) {
 }
 function showImg(src) {
   document.getElementById('modal-img-src').src = src || BLANK_IMG;
-  _imgZoom = 1; paintImgZoom();
+  _imgZoom = 1; _imgTurn = 0; paintImgZoom();
   const w = document.getElementById('img-wrap');
   if (w) { w.scrollTop = 0; w.scrollLeft = 0; }
   openModal('modal-img');
@@ -1218,6 +1224,37 @@ function closeEntry() {
   closeModal('modal-entry');
   renderAll();
 }
+// 아이가 올린 사진이 옆으로 누워 있으면 목사님이 바로 세운다.
+// 돌린 결과를 그대로 저장하므로 다음에 열 때도 서 있다.
+function rotateEntryImage(kind, id, date, idx) {
+  if (!canManage()) return;
+  const doc = getDoc(kind, id, date);
+  if (!doc) return;
+  const pages = kind === 'sermon' ? pagesOf(doc) : (doc.image ? [doc.image] : []);
+  const src = pages[idx];
+  if (!src) return;
+  toast('돌리는 중이에요…');
+  _rotate90(src, out => {
+    if (!out) { toast('사진을 못 돌렸어요'); return; }
+    const next = Object.assign({}, doc);
+    if (kind === 'sermon') {
+      const arr = pages.slice();
+      arr[idx] = out;
+      next.images = arr;
+      next.image = arr[0];
+    } else {
+      next.image = out;
+    }
+    next.editedBy = (findUser(currentUser)||{}).name || '';
+    _docs[dkey(kind, id, date)] = next;
+    paintEntry();
+    if (!_FS_OK) { toast('돌렸어요 (인터넷이 없어 이 기기에만)'); return; }
+    _db.collection('discipleDocs').doc(dkey(kind, id, date)).set(next)
+      .then(() => toast('사진을 돌렸어요'))
+      .catch(e => { console.warn('사진 돌리기 저장 실패:', e); toast('저장이 안 됐어요. 다시 눌러주세요'); });
+  });
+}
+
 function paintEntry() {
   if (!_entryOpen) return;
   const { kind, id, date } = _entryOpen;
@@ -2370,6 +2407,8 @@ function docView(kind, doc, id, date) {
       <div class="relative mt-1">
         <img src="${src}" onclick="showImg(this.src)" class="w-full rounded-xl border cursor-pointer" style="max-height:420px;object-fit:contain;background:#F9FAFB">
         ${_pg.length > 1 ? `<span class="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,.55);color:#fff">${i+1} / ${_pg.length}</span>` : ''}
+        ${canManage() && id !== currentUser ? `<button onclick="event.stopPropagation();rotateEntryImage('${kind}','${id}','${date}',${i})"
+          style="min-height:32px" class="absolute top-2 right-2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">↻ 돌리기</button>` : ''}
       </div>`).join('');
     const memo = (doc.memo||'').trim()
       ? `<p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 mt-2">${esc(doc.memo)}</p>` : '';
@@ -2393,7 +2432,11 @@ function docView(kind, doc, id, date) {
     </div>`;
   }).join('');
   const mins = kind === 'pray' && doc.minutes ? `<p class="text-[11px] text-gray-400 mb-1">🕯️ ${esc(doc.minutes)}분 기도했어요</p>` : '';
-  const img = doc.image ? `<img src="${doc.image}" onclick="showImg(this.src)" class="w-full rounded-xl border mt-2 cursor-pointer" style="max-height:320px;object-fit:contain;background:#F9FAFB">` : '';
+  const img = doc.image ? `<div class="relative mt-2">
+      <img src="${doc.image}" onclick="showImg(this.src)" class="w-full rounded-xl border cursor-pointer" style="max-height:320px;object-fit:contain;background:#F9FAFB">
+      ${canManage() && id !== currentUser ? `<button onclick="event.stopPropagation();rotateEntryImage('${kind}','${id}','${date}',0)"
+        style="min-height:32px" class="absolute top-2 right-2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">↻ 돌리기</button>` : ''}
+    </div>` : '';
   // 큐티에도 비밀 댓글을 붙인다 — 낸 사람과 목사님만 본다.
   return mins + rows + img + ((kind === 'qt' || kind === 'pray') ? noteBlock(kind, id, date) : '');
 }
@@ -2651,7 +2694,7 @@ function qtTallyCard(me) {
   const rows = state.students
     .map(x => ({ x, t: totalOf(x.id), week: cntOf('qt', x.id, currentWeek()) }))
     .sort((a, b) => a.t.qt - b.t.qt || a.x.name.localeCompare(b.x.name));
-  return `<details class="card !p-0 overflow-hidden">
+  return `<details class="card !p-0 overflow-hidden" ${canManage() ? 'open' : ''}>
     <summary class="px-3 py-2.5 flex items-center justify-between cursor-pointer select-none">
       <h3 class="font-bold text-gray-800 text-sm">누적 횟수 보기</h3>
       <span class="text-[11px] text-gray-400">시작한 지 ${days}일</span>
@@ -2770,7 +2813,15 @@ function renderDailyQT() {
       <p class="text-[11px] text-gray-400 mt-1.5">성서유니온 청소년 매일성경 월별 PDF입니다.</p>
     </div>`;
 
+  // 목사님은 아이들 것을 보고 피드백하는 게 먼저다. 그 셋을 맨 위로 올린다.
+  const forWork = canManage()
+    ? `${qtTallyCard(me)}
+       ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 아이들 큐티`, '이름을 누르면 창이 열립니다')}
+       ${medalHeader('qt', qtDate, '큐티')}`
+    : '';
+
   el.innerHTML = `
+    ${forWork}
     ${material}
     ${calendar}
     <div class="card !py-3 text-center">
@@ -2815,10 +2866,9 @@ function renderDailyQT() {
     <div class="card !py-3 text-center">
       <p class="text-sm ${cntOf('qt',me,n)>=4?'text-green-700 font-bold':'text-gray-600'}">이번 주 큐티 ${cntOf('qt',me,n)}일 / 7일 · ${cntOf('qt',me,n)>=4?'통과':'4일 이상 해야 통과'}</p>
     </div>
-    ${qtTallyCard(me)}
-
+    ${canManage() ? '' : `${qtTallyCard(me)}
     ${medalHeader('qt', qtDate, '큐티')}
-    ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 창이 열립니다')}
+    ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 창이 열립니다')}`}
 `;
 }
 
