@@ -323,7 +323,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-09-15.1';
+const APP_BUILD = '2026-10-07.1';
 const CLASS_NAME = '확~마! 제자반';
 const WEEKS = 9;                      // 2026-08-30(일) ~ 2026-10-31(토)
 // 한 주는 주일에 시작해 토요일에 끝난다. 주일 설교로 열고, 토요일 모임으로 닫는다.
@@ -1208,6 +1208,105 @@ function loadGalleryFull(id, cb) {
     .then(d => { _galleryFull[id] = (d.exists && d.data().image) || ''; cb(_galleryFull[id]); })
     .catch(e => { console.warn('원본 불러오기 실패:', e); _galleryFull[id] = ''; cb(''); });
 }
+// ==========================================
+// 내가 달아야 할 댓글
+// 아이가 낸 것 가운데 목사님 피드백이 아직 없는 것을 모은다.
+// 무거운 글·사진을 받아 오지 않고 체크표(state)만 훑어 셈한다 — 그래서 늘 띄워 둘 수 있다.
+// ==========================================
+function todoFeedback() {
+  if (!canManage()) return [];
+  const out = [];
+  const t = today0();
+  for (let n = 0; n < WEEKS; n++) {
+    if (!weekStarted(n)) continue;
+    state.students.forEach(s => {
+      ['qt', 'pray'].forEach(f => {
+        arrOf(f, s.id, n).forEach((on, i) => {
+          if (!on) return;
+          const date = dateOf(n, i);
+          if (parseDate(date) > t) return;
+          if (!handled(f, s.id, date)) out.push({ kind: f, id: s.id, date });
+        });
+      });
+      if (dqtDone(s.id, n)) {
+        const date = dqtDocDate(n);
+        if (!handled('dqt', s.id, date)) out.push({ kind: 'dqt', id: s.id, date });
+      }
+      [['fri', 5], ['sun', 0]].forEach(([ty, di]) => {
+        if (sermonOf(s.id, n, ty) !== 'O') return;
+        const date = dateOf(n, di);
+        if (parseDate(date) > t) return;
+        if (!handled('sermon', s.id, date)) out.push({ kind: 'sermon', id: s.id, date });
+      });
+    });
+  }
+  return out;
+}
+
+let _todoAll = false, _todoSort = 'new', _todoKind = null;
+function setTodo(k, v) {
+  if (k === 'kind') _todoKind = _todoKind === v ? null : v;
+  else _todoSort = v;
+  _todoAll = false;
+  renderAll();
+}
+function todoCard() {
+  if (!canManage()) return '';
+  const all = todoFeedback();
+  const list = (_todoKind ? all.filter(x => x.kind === _todoKind) : all.slice())
+    .sort((a, b) => _todoSort === 'new'
+      ? (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)
+      : (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (!all.length) {
+    return `<div class="card !py-3 bg-green-50 border border-green-200 text-center">
+      <p class="text-sm font-bold text-green-700">달아야 할 댓글이 없습니다</p>
+      <p class="text-[11px] text-green-700/70 mt-0.5">아이들이 낸 것에 모두 답하셨어요</p>
+    </div>`;
+  }
+  const show = _todoAll ? list : list.slice(0, 10);
+  const label = { qt: '큐티', dqt: 'D형', pray: '기도', sermon: '설교' };
+  const tone = { qt: 'bg-blue-50 text-blue-700', dqt: 'bg-purple-50 text-purple-700',
+                 pray: 'bg-green-50 text-green-700', sermon: 'bg-amber-50 text-amber-700' };
+  const counts = { qt:0, dqt:0, pray:0, sermon:0 };
+  all.forEach(x => counts[x.kind]++);
+  return `<div class="card !p-0 overflow-hidden border border-red-200">
+    <div class="px-3 py-2.5 flex items-center justify-between" style="background:#FEF2F2">
+      <h3 class="font-bold text-red-700 text-sm">내가 달아야 할 댓글</h3>
+      <span class="text-sm font-bold text-red-700">${all.length}</span>
+    </div>
+    <div class="px-3 py-2 border-b flex items-center gap-1 flex-wrap">
+      ${[['qt','큐티'],['dqt','D형'],['pray','기도'],['sermon','설교']].map(([k, lab]) =>
+        `<button onclick="setTodo('kind','${k}')" style="min-height:30px"
+          class="text-[11px] px-2.5 py-1 rounded-full font-bold ${_todoKind===k?'bg-gray-900 text-white':'bg-gray-100 text-gray-600'}">
+          ${lab} ${counts[k]}</button>`).join('')}
+      <button onclick="setTodo('sort','${_todoSort === 'new' ? 'old' : 'new'}')" style="min-height:30px"
+        class="text-[11px] px-2.5 py-1 rounded-full font-bold bg-white border text-gray-600 ml-auto">
+        ${_todoSort === 'new' ? '최근순' : '오래된순'}</button>
+    </div>
+    <div class="divide-y">
+      ${show.map(x => {
+        const u = findUser(x.id) || {};
+        const d = parseDate(x.date);
+        const ago = Math.round((today0() - d) / 86400000);
+        return `<div class="flex items-center active:bg-gray-50">
+          <button onclick="openEntry('${x.kind}','${x.id}','${x.date}')"
+            style="min-height:unset" class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 text-left">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${tone[x.kind]}">${label[x.kind]}</span>
+            <span class="text-sm font-bold text-gray-900 flex-shrink-0">${u.name || ''}</span>
+            <span class="text-[11px] text-gray-400 truncate">${d.getMonth()+1}/${d.getDate()}${ago > 0 ? ` · ${ago}일 지남` : ' · 오늘'}</span>
+          </button>
+          <button onclick="markSeen('${x.kind}','${x.id}','${x.date}')" style="min-height:34px"
+            class="flex-shrink-0 text-[11px] font-bold text-gray-500 px-3 py-1.5 mr-2 rounded-full border bg-white">확인</button>
+        </div>`;
+      }).join('')}
+    </div>
+    ${list.length > show.length
+      ? `<button onclick="_todoAll=true;renderAll()" class="w-full py-2.5 text-xs font-bold text-gray-600 border-t">남은 ${list.length - show.length}개 더 보기</button>`
+      : (_todoAll && list.length > 10
+        ? `<button onclick="_todoAll=false;renderAll()" class="w-full py-2.5 text-xs font-bold text-gray-500 border-t">접기</button>` : '')}
+  </div>`;
+}
+
 // ── 아이 제출물 창 ──
 // 목록에서 이름을 누르면 그 아이 것만 창으로 뜬다. 아래로 길게 늘어놓지 않아
 // 열한 명을 훑기가 수월하고, 사진도 크게 본다.
@@ -1215,6 +1314,8 @@ let _entryOpen = null;   // { kind, id, date }
 function openEntry(kind, id, date) {
   _entryOpen = { kind, id, date };
   _replyTo = null; _editingDoc = null; _delArm = null;
+  loadDoc(kind, id, date);
+  loadNote(kind, id, date);
   paintEntry();
   openModal('modal-entry');
 }
@@ -1270,6 +1371,11 @@ function paintEntry() {
     doc === undefined ? `<p class="text-sm text-gray-400 py-8 text-center">불러오는 중…</p>`
     : !hasContent(kind, doc) ? `<p class="text-sm text-gray-400 py-8 text-center">아직 올리지 않았어요</p>`
     : `${editing ? docEditForm(kind, id, date) : docView(kind, doc, id, date)}
+       ${!editing && canManage() && id !== currentUser ? `
+         <button onclick="markSeen('${kind}','${id}','${date}',${noteSeen(kind,id,date) ? 'false' : 'true'})"
+           class="w-full mt-3 py-2.5 rounded-xl font-bold text-sm ${noteSeen(kind,id,date) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}">
+           ${noteSeen(kind,id,date) ? '✓ 확인함 — 다시 누르면 풀립니다' : '댓글 없이 확인만 하기'}
+         </button>` : ''}
        ${!editing && canManage() ? (_delArm === kind + '_' + id ? `
          <div class="flex items-center gap-2 mt-3">
            <span class="text-xs text-red-600 font-semibold flex-1">${u.name} ${KINDS[kind].label}을 지울까요?</span>
@@ -2004,6 +2110,7 @@ function renderHome() {
     </div>`;
 
   el.innerHTML = `
+    ${todoCard()}
     ${bdayHome}
     ${homeGallery}
     ${noticeCard()}
@@ -2088,6 +2195,15 @@ function noteMsgs(kind, id, date) {
 }
 function canSeeNote(id) { return id === currentUser || canManage(); }
 // 목사님이 이모지 하나만 눌러도 '봤다'는 뜻이므로 피드백으로 친다.
+// 댓글을 달지 않아도 목사님이 '확인'을 누르면 할 일에서 빠진다.
+function noteSeen(kind, id, date) { const d = getNote(kind, id, date); return !!(d && d.seen); }
+function markSeen(kind, id, date, on) {
+  if (!canManage()) return;
+  saveNoteDoc(kind, id, date, { seen: on !== false }, on === false ? '확인을 풀었습니다' : '확인했습니다');
+}
+// 손댄 것으로 치는 기준 — 피드백을 달았거나, 확인을 눌렀거나.
+function handled(kind, id, date) { return hasLeaderNote(kind, id, date) || noteSeen(kind, id, date); }
+
 function hasLeaderNote(kind, id, date) {
   if (noteMsgs(kind, id, date).some(m => m.leader)) return true;
   const r = noteReacts(kind, id, date);
@@ -2102,7 +2218,8 @@ function saveNoteDoc(kind, id, date, patch, okMsg) {
     { kind:'note', target:kind, studentId:id, date,
       msgs: Array.isArray(prev.msgs) ? prev.msgs : [],
       reacts: prev.reacts || {},
-      reactLog: Array.isArray(prev.reactLog) ? prev.reactLog : [] },
+      reactLog: Array.isArray(prev.reactLog) ? prev.reactLog : [],
+      seen: !!prev.seen },
     patch, { updatedAt:new Date().toISOString() });
   _docs[k] = doc;
   renderAll();
@@ -2495,7 +2612,7 @@ function photoFeed(kind, date, heading, note) {
   done.sort((a,b) => String(a.doc.updatedAt||'').localeCompare(String(b.doc.updatedAt||'')));
 
   const needFeedback = canManage()
-    ? done.filter(x => !hasLeaderNote(kind, x.s.id, date)).map(x => x.s.name) : [];
+    ? done.filter(x => !handled(kind, x.s.id, date)).map(x => x.s.name) : [];
   const yet = waiting.filter(x => !x.loading);
   const usesPhoto = kind !== 'pray';
 
@@ -2503,7 +2620,7 @@ function photoFeed(kind, date, heading, note) {
   // 열한 명 사진을 다 펼쳐 두면 화면이 너무 길어져 확인이 힘들다.
   const rows = done.map(({ s, doc }) => {
     const me = s.id === currentUser;
-    const noFb = canManage() && !hasLeaderNote(kind, s.id, date);
+    const noFb = canManage() && !handled(kind, s.id, date);
     const cnt = noteMsgs(kind, s.id, date).length;
     const when = doc.updatedAt ? new Date(doc.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
     return `<div class="border-b last:border-0">
