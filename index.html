@@ -57,6 +57,8 @@
   .pin-input { letter-spacing:0.5em; font-size:1.5rem; text-align:center; }
 
   .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; }
+  /* 한 사람 전체 보기(1000) 위에 그날 창(1100)이 올라오게 한다 — 겹쳐 열린다. */
+  #modal-entry { z-index:1100; }
   .modal.open { display:flex; }
 
   input[type="text"], input[type="date"], input[type="tel"], select, textarea {
@@ -212,6 +214,20 @@
 </div>
 
 <!-- 아이 제출물 하나를 창으로 열어 본다 -->
+<!-- 한 사람이 낸 것을 한 화면에서 쭉 본다 -->
+<div id="modal-person" class="modal">
+  <div class="bg-white rounded-2xl w-full max-w-lg mx-3 flex flex-col overflow-hidden" style="max-height:92vh">
+    <div class="p-3 border-b flex items-center justify-between gap-2 flex-shrink-0">
+      <div class="min-w-0">
+        <p id="person-title" class="font-bold text-gray-900 text-sm truncate"></p>
+        <p id="person-sub" class="text-[11px] text-gray-400 mt-0.5 truncate"></p>
+      </div>
+      <button onclick="closePersonView()" style="min-height:34px" class="text-gray-400 text-2xl px-2 leading-none flex-shrink-0">&times;</button>
+    </div>
+    <div id="person-body" class="p-3 overflow-y-auto flex-1" style="background:#F6F6F8"></div>
+  </div>
+</div>
+
 <div id="modal-entry" class="modal">
   <div class="bg-white rounded-2xl w-full max-w-lg mx-3 flex flex-col overflow-hidden" style="max-height:92vh">
     <div class="p-3 border-b flex items-center justify-between gap-2 flex-shrink-0">
@@ -323,7 +339,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-11-02.1';
+const APP_BUILD = '2026-11-12.1';
 const CLASS_NAME = '확~마! 제자반';
 // 2026-11-02 목사님 지시 — 큐티를 11월 말까지 열어 둔다.
 // 기간(WEEKS)만 늘리고 수료 판정 기준(JUDGE_WEEKS)은 9주로 묶는다. 둘을 같이 늘리면
@@ -1426,6 +1442,138 @@ function rotateEntryImage(kind, id, date, idx) {
   });
 }
 
+// ==========================================
+// 한 사람 전체 보기 — 이름을 누르면 그 사람이 낸 것을 한 화면에서 쭉 본다
+// ==========================================
+// 전에는 날짜를 하나 고른 뒤에야 그날 낸 사람들이 보였다. 한 아이가 지난주에
+// 무엇을 썼는지 보려면 달력에서 날짜를 바꾸고 → 이름을 누르고 → 닫고를
+// 반복해야 했다. 목사님이 "이름 누르면 한방에 다 확인"하게 해달라고 하셔서 뺐다.
+let _personOpen = null;        // { kind, id, shown, focus }
+const _personNoteOn = {};      // 펼쳐 둔 댓글칸 (날짜별)
+const PERSON_PAGE = 8;         // 한 번에 펼치는 개수
+
+// 그 사람이 낸 날들 — 최근 것이 먼저. 체크 기록만 보므로 서버를 읽지 않는다.
+// 날짜 목록을 뽑자고 없는 문서까지 백 번 읽을 수는 없다.
+function personDates(kind, id) {
+  const out = [];
+  for (let n = 0; n < WEEKS; n++) {
+    if (!weekStarted(n)) break;
+    if (kind === 'dqt') { const d = dqtOf(id, n); if (d) out.push(d); continue; }
+    if (kind === 'sermon') {
+      if (sermonOf(id, n, 'sun') === 'O') out.push(dateOf(n, 0));
+      if (sermonOf(id, n, 'fri') === 'O') out.push(dateOf(n, 5));
+      continue;
+    }
+    const f = (KINDS[kind] || {}).field;
+    if (!f) continue;
+    arrOf(f, id, n).forEach((on, i) => { if (on) out.push(dateOf(n, i)); });
+  }
+  // 체크가 어긋난 날이 있어도 이미 받아 둔 글은 빠뜨리지 않는다(읽기는 더 안 한다).
+  const pre = `${kind}_${id}_`;
+  Object.keys(_docs).forEach(k => {
+    if (!k.startsWith(pre)) return;
+    const d = k.slice(pre.length);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && hasContent(kind, _docs[k])) out.push(d);
+  });
+  return Array.from(new Set(out)).sort().reverse();
+}
+
+// 기도 영적일지는 사적인 글이다 — 인도자와 본인 말고는 열리지 않는다.
+function canSeePerson(kind, id) {
+  return kind !== 'pray' || isLeader() || id === currentUser;
+}
+
+function openPersonView(kind, id, focus) {
+  if (!canSeePerson(kind, id)) return;
+  const dates = personDates(kind, id);
+  // 눌러서 들어온 날이 아래쪽에 있으면 거기까지 펼쳐 둔다 — 찾으러 더 누르지 않게.
+  const at = focus ? dates.indexOf(focus) : -1;
+  _personOpen = { kind, id, focus: focus || null,
+                  shown: Math.max(PERSON_PAGE, at >= 0 ? at + 1 : 0) };
+  _replyTo = null; _editingDoc = null; _delArm = null;
+  paintPerson();
+  openModal('modal-person');
+  if (focus) setTimeout(() => {
+    const el = document.getElementById('person-at-' + focus);
+    if (el) el.scrollIntoView({ block: 'start' });
+  }, 0);
+}
+function closePersonView() {
+  _personOpen = null;
+  _replyTo = null; _editingDoc = null; _delArm = null;
+  closeModal('modal-person');
+  renderAll();
+}
+function personOpenNote(date) { _personNoteOn[date] = true; paintPerson(); }
+function personMore() {
+  if (!_personOpen) return;
+  _personOpen.shown += PERSON_PAGE;
+  paintPerson();
+}
+
+function personNoteArea(kind, id, date) {
+  if (!canSeeNote(id)) return '';
+  loadNote(kind, id, date);
+  const msgs = noteMsgs(kind, id, date);
+  if (_personNoteOn[date] || msgs.length) return noteBlock(kind, id, date);
+  const seen = noteSeen(kind, id, date);
+  return `<button onclick="personOpenNote('${date}')" style="min-height:34px;background:#F8F7FF"
+    class="w-full mt-2 py-2 rounded-xl text-xs font-semibold border border-dashed ${seen ? 'border-gray-200 text-gray-400' : 'border-indigo-200 text-indigo-600'}"
+    >${seen ? '✓ 확인함 · 댓글 달기' : (isLeader() ? '＋ 피드백 달기' : '＋ 댓글 달기')}</button>`;
+}
+
+function paintPerson() {
+  if (!_personOpen) return;
+  const { kind, id, shown, focus } = _personOpen;
+  if (!canSeePerson(kind, id)) { closePersonView(); return; }
+  const u = findUser(id) || {};
+  const label = (KINDS[kind] || {}).label || kind;
+  const dates = personDates(kind, id);
+  const show = dates.slice(0, shown);
+  // 보이는 것만 받아 온다. 한 사람 몫을 한꺼번에 받으면 사진까지 딸려 와 폰이 버거워진다.
+  show.forEach(d => { loadDoc(kind, id, d); if (canSeeNote(id)) loadNote(kind, id, d); });
+
+  const wk = currentWeek();
+  const f = (KINDS[kind] || {}).field;
+  const thisWeek = f ? cntOf(f, id, wk) : (kind === 'dqt' ? (dqtDone(id, wk) ? 1 : 0) : 0);
+  document.getElementById('person-title').textContent =
+    `${u.name || ''}${u.role ? ' · ' + u.role : ''} — ${label}`;
+  document.getElementById('person-sub').textContent =
+    `모두 ${dates.length}개` + (f ? ` · 이번 주 ${thisWeek}일` : '') +
+    (dates.length > show.length ? ` · ${show.length}개 보는 중` : '');
+
+  const cards = show.map(d => {
+    const doc = getDoc(kind, id, d);
+    const ref = QT_SCHEDULE[d] || '';
+    const noFb = canManage() && hasContent(kind, doc) && !handled(kind, id, d);
+    const when = doc && doc.updatedAt
+      ? new Date(doc.updatedAt).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+    return `<div id="person-at-${d}" class="card !py-3 ${focus === d ? 'ring-2 ring-gray-900' : ''}">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <div class="min-w-0">
+          <p class="text-sm font-bold text-gray-900">${dayLabel(d)}
+            ${doc && doc.late ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-700 ml-1">늦음</span>' : ''}
+            ${noFb ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-bold ml-1">피드백 필요</span>' : ''}</p>
+          <p class="text-[11px] text-gray-400 truncate">${esc(ref)}${when ? ` · ${when}` : ''}</p>
+        </div>
+        <button onclick="openEntry('${kind}','${id}','${d}')" style="min-height:30px"
+          class="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full font-semibold bg-white border text-gray-600">그날 창</button>
+      </div>
+      ${doc === undefined ? '<p class="text-sm text-gray-400 py-5 text-center">불러오는 중…</p>'
+        : hasContent(kind, doc) ? docView(kind, doc, id, d, { note:false }) + personNoteArea(kind, id, d)
+        : '<p class="text-sm text-gray-400 py-5 text-center">글이 비어 있어요</p>'}
+    </div>`;
+  }).join('');
+
+  document.getElementById('person-body').innerHTML = `
+    ${dates.length ? cards : `<p class="text-sm text-gray-400 py-10 text-center">아직 낸 것이 없어요</p>`}
+    ${dates.length > show.length ? `
+      <button onclick="personMore()" class="w-full py-3 rounded-xl font-bold text-sm bg-white border text-gray-700">
+        더 보기 (${dates.length - show.length}개 남음)
+      </button>
+      <p class="text-[11px] text-gray-400 mt-1.5 text-center">사진까지 한꺼번에 받으면 느려져서 ${PERSON_PAGE}개씩 펼칩니다</p>` : ''}`;
+}
+
 function paintEntry() {
   if (!_entryOpen) return;
   const { kind, id, date } = _entryOpen;
@@ -1437,10 +1585,15 @@ function paintEntry() {
   document.getElementById('entry-sub').textContent =
     `${KINDS[kind] ? KINDS[kind].label : kind} · ${dayLabel(date)}` +
     (doc && doc.updatedAt ? ` · ${new Date(doc.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}` : '');
+  const _toAll = canSeePerson(kind, id) && !(_personOpen && _personOpen.kind === kind && _personOpen.id === id)
+    ? `<button onclick="closeEntry();openPersonView('${kind}','${id}','${date}')"
+         class="w-full mb-3 py-2.5 rounded-xl font-bold text-sm bg-gray-100 text-gray-700">
+         ${esc(u.name || '')} ${KINDS[kind] ? KINDS[kind].label : kind} 전체 보기 ›</button>`
+    : '';
   document.getElementById('entry-body').innerHTML =
     doc === undefined ? `<p class="text-sm text-gray-400 py-8 text-center">불러오는 중…</p>`
-    : !hasContent(kind, doc) ? `<p class="text-sm text-gray-400 py-8 text-center">아직 올리지 않았어요</p>`
-    : `${editing ? docEditForm(kind, id, date) : docView(kind, doc, id, date)}
+    : !hasContent(kind, doc) ? `${_toAll}<p class="text-sm text-gray-400 py-8 text-center">아직 올리지 않았어요</p>`
+    : `${_toAll}${editing ? docEditForm(kind, id, date) : docView(kind, doc, id, date)}
        ${!editing && canManage() && id !== currentUser ? `
          <button onclick="markSeen('${kind}','${id}','${date}',${noteSeen(kind,id,date) ? 'false' : 'true'})"
            class="w-full mt-3 py-2.5 rounded-xl font-bold text-sm ${noteSeen(kind,id,date) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}">
@@ -1870,7 +2023,9 @@ function renderAll() {
   document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
   paintNoteDots();
   paintPushBtn();
-  if (_entryOpen && !/TEXTAREA|INPUT/.test((document.activeElement||{}).tagName || '')) paintEntry();
+  const _typing = /TEXTAREA|INPUT/.test((document.activeElement||{}).tagName || '');
+  if (_entryOpen && !_typing) paintEntry();
+  if (_personOpen && !_typing) paintPerson();
   ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
      sermon: renderSermon, gallery: renderGallery, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
 }
@@ -2345,7 +2500,8 @@ function meAsWriter(text) {
 
 function addNote(kind, id, date) {
   if (!canSeeNote(id)) return;
-  const ta = document.getElementById(`note-${kind}-${id}`);
+  // 날짜까지 넣어 찾는다 — 한 사람 전체 보기에서는 같은 사람의 칸이 여러 개 떠 있다.
+  const ta = document.getElementById(`note-${kind}-${id}-${date}`);
   const text = (ta ? ta.value : '').trim();
   if (!text) { toast('내용을 적어주세요'); return; }
   if (ta) ta.value = '';
@@ -2359,7 +2515,7 @@ function openReply(kind, id, date, idx) { _replyTo = `${kind}|${id}|${date}|${id
 function cancelReply() { _replyTo = null; renderAll(); }
 function addReply(kind, id, date, idx) {
   if (!canSeeNote(id)) return;
-  const ta = document.getElementById(`reply-${kind}-${id}-${idx}`);
+  const ta = document.getElementById(`reply-${kind}-${id}-${date}-${idx}`);
   const text = (ta ? ta.value : '').trim();
   if (!text) { toast('내용을 적어주세요'); return; }
   const msgs = noteMsgs(kind, id, date).map((m, k) => k !== idx ? m
@@ -2419,7 +2575,7 @@ function noteBlock(kind, id, date) {
         ${replies.map((r, ri) => bubble(r, k, ri)).join('')}
       </div>` : ''}
       ${replying ? `<div class="mt-1.5 ml-4 pl-3" style="border-left:2px solid #E0DEF5">
-        <textarea id="reply-${kind}-${id}-${k}" rows="2" placeholder="${esc(m.name)}에게 답글"
+        <textarea id="reply-${kind}-${id}-${date}-${k}" rows="2" placeholder="${esc(m.name)}에게 답글"
           class="w-full border rounded-xl p-2.5 text-sm resize-none"></textarea>
         <div class="flex gap-2 mt-1.5">
           <button onclick="addReply('${kind}','${id}','${date}',${k})" style="min-height:34px"
@@ -2437,7 +2593,7 @@ function noteBlock(kind, id, date) {
     ${doc === undefined ? `<p class="text-xs text-gray-400 mt-2">불러오는 중…</p>` : `
       ${msgs.length ? `<div class="mt-2">${thread}</div>`
         : `<p class="text-xs text-gray-400 mt-2">${isLeader() ? '아직 피드백을 달지 않았습니다.' : '아직 목사님 피드백이 없어요.'}</p>`}
-      <textarea id="note-${kind}-${id}" rows="2"
+      <textarea id="note-${kind}-${id}-${date}" rows="2"
         placeholder="${isLeader() ? '피드백을 적어주세요 — 이 아이만 봅니다' : '목사님께 묻고 싶은 것이나 하고 싶은 말'}"
         class="w-full border rounded-xl p-2.5 text-sm resize-none mt-2"></textarea>
       <button onclick="addNote('${kind}','${id}','${date}')" style="min-height:38px"
@@ -2584,7 +2740,11 @@ const DOC_FIELDS = {
 const DQT_STYLE = { obs:['step-obs','b-obs','관찰'], int:['step-int','b-int','해석'],
                     feel:['step-feel','b-feel','느낀점'], apply:['step-app','b-app','적용'] };
 
-function docView(kind, doc, id, date) {
+// opts.note === false 이면 비밀 댓글 칸을 붙이지 않는다.
+// 한 사람 전체 보기는 날짜가 여럿이라, 날마다 큰 댓글칸을 펴 두면
+// 한 화면에 한 날짜밖에 안 들어와 '한눈에 보기'가 되지 않는다.
+function docView(kind, doc, id, date, opts) {
+  const _withNote = !(opts && opts.note === false);
   if (!doc) return '';
   // 손으로 쓴 것을 찍어 올리는 둘 — 사진이 먼저다.
   if (kind === 'dqt' || kind === 'sermon') {
@@ -2606,7 +2766,7 @@ function docView(kind, doc, id, date) {
            class="w-full mt-2 py-2 rounded-xl text-xs font-bold ${doc.applyDone?'bg-green-100 text-green-700':'bg-white border border-gray-300 text-gray-600'}">
            ${doc.applyDone ? '✓ 어제 적은 적용을 지켰습니다' : '적용을 지켰으면 눌러주세요'}</button>`
       : (kind === 'dqt' && doc.applyDone ? `<p class="text-xs text-green-700 font-bold mt-2">✓ 적용을 지켰습니다</p>` : '');
-    return head + img + memo + apply + noteBlock(kind, id, date);
+    return head + img + memo + apply + (_withNote ? noteBlock(kind, id, date) : '');
   }
   // 칸을 나눠 쓰던 시절의 기도일지는 그 칸들을 그대로 보여 준다.
   const fieldList = (kind === 'pray' && !(doc.text||'').trim())
@@ -2627,7 +2787,7 @@ function docView(kind, doc, id, date) {
         style="min-height:32px" class="absolute top-2 right-2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">↻ 돌리기</button>` : ''}
     </div>` : '';
   // 큐티에도 비밀 댓글을 붙인다 — 낸 사람과 목사님만 본다.
-  return mins + rows + img + ((kind === 'qt' || kind === 'pray') ? noteBlock(kind, id, date) : '');
+  return mins + rows + img + ((_withNote && (kind === 'qt' || kind === 'pray')) ? noteBlock(kind, id, date) : '');
 }
 
 // 인도자가 고치는 칸
@@ -2669,7 +2829,6 @@ function docPreview(kind, doc) {
 
 function photoFeed(kind, date, heading, note) {
   let people = state.students.concat(LEADERS.filter(l => l.id === MANAGER && l.id !== currentUser));
-  if (feedFilter[kind]) people = people.filter(x => x.id === feedFilter[kind]);
   people.forEach(s => loadDoc(kind, s.id, date));
   if (canManage()) people.forEach(s => loadNote(kind, s.id, date));
 
@@ -2696,7 +2855,7 @@ function photoFeed(kind, date, heading, note) {
     const cnt = noteMsgs(kind, s.id, date).length;
     const when = doc.updatedAt ? new Date(doc.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
     return `<div class="border-b last:border-0">
-      <div onclick="openEntry('${kind}','${s.id}','${date}')"
+      <div onclick="openPersonView('${kind}','${s.id}','${date}')"
            class="flex items-center gap-2.5 py-2 cursor-pointer">
         ${!usesPhoto ? '' : doc.image
             ? `<img src="${doc.image}" class="w-11 h-11 rounded-lg object-cover border flex-shrink-0" style="background:#F9FAFB">`
@@ -2736,7 +2895,7 @@ function photoFeed(kind, date, heading, note) {
       ${needFeedback.length ? `<p class="text-[11px] text-red-600 font-semibold mt-1.5">피드백 없음 — ${needFeedback.join(' · ')}</p>` : ''}
       ${rows ? `<div class="mt-1">${rows}</div>`
              : `<p class="text-sm text-gray-400 text-center py-6">아직 올라온 것이 없어요</p>`}
-      ${rows ? `<p class="text-[11px] text-gray-400 mt-2 text-center">이름을 누르면 창이 열립니다</p>` : ''}
+      ${rows ? `<p class="text-[11px] text-gray-400 mt-2 text-center">이름을 누르면 그 사람이 낸 것을 처음부터 다 봅니다</p>` : ''}
     </div>`;
 }
 
@@ -2820,13 +2979,6 @@ function imageBox(kind, date, saved) {
 function qtMedal(count) {
   return ['🍞','🌱','🌿','🌳','✅','🥇','🏆','👑'][Math.min(Math.max(count, 0), 7)];
 }
-// 이름을 누르면 그 아이 것만 본다. 큐티·기도가 따로 기억한다.
-const feedFilter = { qt: null, pray: null };
-function setFeedFilter(kind, id) {
-  feedFilter[kind] = feedFilter[kind] === id ? null : id;
-  if (kind === 'qt') renderQT(); else renderPray();
-}
-
 // 이번 주에 몇 번 했는지에 따라 줄을 세운다. 많이 한 줄이 위로 온다.
 function medalHeader(kind, date, label) {
   const sl = slotOf(date);
@@ -2838,21 +2990,22 @@ function medalHeader(kind, date, label) {
     const c = cntOf(kind, x.id, n);
     (byCount[c] = byCount[c] || []).push(x);
   });
-  const on = feedFilter[kind];
   const rows = Object.keys(byCount).map(Number).sort((a, b) => b - a).map(c => `
     <div class="flex items-center gap-1.5 flex-wrap py-1">
       <span class="text-xs font-bold text-gray-700 flex-shrink-0 w-14">${c}회 ${qtMedal(c)}</span>
-      ${byCount[c].map(x => `<button onclick="setFeedFilter('${kind}','${x.id}')"
-        style="min-height:unset;line-height:1.5"
-        class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full font-semibold ${on===x.id?'bg-gray-900 text-white':'bg-gray-100 text-gray-600'}">${x.name}</button>`).join('')}
+      ${byCount[c].map(x => canSeePerson(kind, x.id)
+        ? `<button onclick="openPersonView('${kind}','${x.id}')"
+             style="min-height:unset;line-height:1.5"
+             class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600">${x.name}</button>`
+        : `<span style="line-height:1.5"
+             class="flex-shrink-0 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-gray-50 text-gray-400">${x.name}</span>`).join('')}
     </div>`).join('');
   return `<div class="card !py-3">
     <div class="flex items-center justify-between mb-1">
       <h3 class="font-bold text-gray-800 text-sm">${n+1}주차 ${label} 등급</h3>
-      ${on ? `<button onclick="setFeedFilter('${kind}','${on}')" style="min-height:unset" class="text-[11px] font-semibold text-gray-500 underline">전체 보기</button>` : ''}
     </div>
     ${rows}
-    <p class="text-[11px] text-gray-400 mt-1">7회면 👑${canSeeCheck() ? ' · 이름을 누르면 그 사람 것만 봅니다' : ''}</p>
+    <p class="text-[11px] text-gray-400 mt-1">7회면 👑${kind !== 'pray' || isLeader() ? ' · 이름을 누르면 그 사람이 낸 것을 처음부터 다 봅니다' : ''}</p>
   </div>`;
 }
 
