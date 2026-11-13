@@ -339,7 +339,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-11-13.1';
+const APP_BUILD = '2026-11-13.2';
 const CLASS_NAME = '확~마! 제자반';
 // 2026-11-02 목사님 지시 — 큐티를 11월 말까지 열어 둔다.
 // 기간(WEEKS)만 늘리고 수료 판정 기준(JUDGE_WEEKS)은 9주로 묶는다. 둘을 같이 늘리면
@@ -2454,7 +2454,11 @@ function markSeen(kind, id, date, on) {
 function handled(kind, id, date) { return hasLeaderNote(kind, id, date) || noteSeen(kind, id, date); }
 
 function hasLeaderNote(kind, id, date) {
-  if (noteMsgs(kind, id, date).some(m => m.leader)) return true;
+  // 윗글뿐 아니라 대댓글도 본다. 아이 댓글에 '답글'로 받아 준 날이 계속
+  // '아직 안 답했다'로 남아 있었다(2026-11-13에 서버 기록에서 찾음).
+  const msgs = noteMsgs(kind, id, date);
+  if (msgs.some(m => m.leader)) return true;
+  if (msgs.some(m => (Array.isArray(m.replies) ? m.replies : []).some(r => r.leader))) return true;
   const r = noteReacts(kind, id, date);
   return Object.keys(r).some(e => (r[e] || []).some(u => LEADERS.some(l => l.id === u)));
 }
@@ -2849,6 +2853,11 @@ function docPreview(kind, doc) {
   return doc.image ? '사진' : '';
 }
 
+// 그날 피드에서 이미 답한 아이를 접어 둘지. 목사님 화면에만 쓴다 —
+// 아이들은 서로 보고 배우는 것이 목적이라 '답했는지'로 거를 일이 없다.
+let _feedShowDone = false;
+function toggleFeedDone() { _feedShowDone = !_feedShowDone; renderAll(); }
+
 function photoFeed(kind, date, heading, note) {
   let people = state.students.concat(LEADERS.filter(l => l.id === MANAGER && l.id !== currentUser));
   people.forEach(s => loadDoc(kind, s.id, date));
@@ -2866,12 +2875,21 @@ function photoFeed(kind, date, heading, note) {
 
   const needFeedback = canManage()
     ? done.filter(x => needsFb(kind, x.s.id, date)).map(x => x.s.name) : [];
+  // 답을 단 아이는 접는다. 오늘 챙길 사람만 남겨야 목록이 일이 된다.
+  const answered = canManage() ? done.filter(x => handled(kind, x.s.id, date)) : [];
+  const folding = canManage() && !_feedShowDone && answered.length > 0;
+  const list = folding ? done.filter(x => !handled(kind, x.s.id, date)) : done;
+  const doneNote = answered.length && canManage()
+    ? `<button onclick="toggleFeedDone()" style="min-height:32px"
+         class="w-full mt-2 py-2 rounded-xl text-[11px] font-bold border bg-white text-gray-500">
+         ${_feedShowDone ? `답한 ${answered.length}명 접기` : `답한 ${answered.length}명도 보기`}</button>`
+    : '';
   const yet = waiting.filter(x => !x.loading);
   const usesPhoto = kind !== 'pray';
 
   // 한 사람씩 한 줄로 접어 둔다. 누른 사람 것만 펼쳐 보여준다 —
   // 열한 명 사진을 다 펼쳐 두면 화면이 너무 길어져 확인이 힘들다.
-  const rows = done.map(({ s, doc }) => {
+  const rows = list.map(({ s, doc }) => {
     const me = s.id === currentUser;
     const noFb = canManage() && needsFb(kind, s.id, date);
     const cnt = noteMsgs(kind, s.id, date).length;
@@ -2914,10 +2932,12 @@ function photoFeed(kind, date, heading, note) {
         <span class="text-xs font-bold ${done.length?'text-blue-600':'text-gray-300'}">${done.length}명 올림</span>
       </div>
       ${note ? `<p class="text-[11px] text-gray-400 mt-0.5">${note}</p>` : ''}
-      ${needFeedback.length ? `<p class="text-[11px] text-red-600 font-semibold mt-1.5">피드백 없음 — ${needFeedback.join(' · ')}</p>` : ''}
+      ${needFeedback.length && !folding ? `<p class="text-[11px] text-red-600 font-semibold mt-1.5">피드백 없음 — ${needFeedback.join(' · ')}</p>` : ''}
       ${rows ? `<div class="mt-1">${rows}</div>`
-             : `<p class="text-sm text-gray-400 text-center py-6">아직 올라온 것이 없어요</p>`}
+        : done.length ? `<p class="text-sm text-green-700 font-bold text-center py-6">올린 ${done.length}명에게 모두 답하셨어요</p>`
+        : `<p class="text-sm text-gray-400 text-center py-6">아직 올라온 것이 없어요</p>`}
       ${rows ? `<p class="text-[11px] text-gray-400 mt-2 text-center">이름을 누르면 그 사람이 낸 것을 처음부터 다 봅니다</p>` : ''}
+      ${doneNote}
     </div>`;
 }
 
@@ -3180,7 +3200,7 @@ function renderDailyQT() {
   // 목사님은 아이들 것을 보고 피드백하는 게 먼저다. 그 셋을 맨 위로 올린다.
   const forWork = canManage()
     ? `${qtTallyCard(me)}
-       ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 아이들 큐티`, '이름을 누르면 창이 열립니다')}
+       ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 아이들 큐티`, '이름을 누르면 그 사람이 낸 것을 처음부터 다 봅니다')}
        ${medalHeader('qt', qtDate, '큐티')}`
     : '';
 
@@ -3232,7 +3252,7 @@ function renderDailyQT() {
     </div>
     ${canManage() ? '' : `${qtTallyCard(me)}
     ${medalHeader('qt', qtDate, '큐티')}
-    ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 창이 열립니다')}`}
+    ${peopleList('qt', qtDate, `${dayLabel(qtDate)} 친구들 큐티`, '이름을 누르면 그 사람이 낸 것을 처음부터 다 봅니다')}`}
 `;
 }
 
