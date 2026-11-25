@@ -322,7 +322,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-11-25.1';
+const APP_BUILD = '2026-11-25.2';
 const CLASS_NAME = '확~마! 제자반';
 // 2026-11-02 목사님 지시 — 큐티를 11월 말까지 열어 둔다.
 // 기간(WEEKS)만 늘리고 수료 판정 기준(JUDGE_WEEKS)은 9주로 묶는다. 둘을 같이 늘리면
@@ -786,8 +786,13 @@ function doLogin() {
   document.getElementById('login-screen').style.display = 'none';
   resetDates();
   renderAll();
+  watchGuestbook();
 }
 function doLogout() {
+  if (stopGuestbook) stopGuestbook();
+  stopGuestbook = null;
+  guestbookEntries = null;
+  document.getElementById('page-home').replaceChildren();
   _newNotes = [];
   _notesWatching = false;
   currentUser = null;
@@ -2187,13 +2192,80 @@ function noticeCard() {
   </div>`;
 }
 
+let stopGuestbook = null;
+let guestbookEntries = null;
+let guestbookError = false;
+
+function watchGuestbook() {
+  if (!currentUser || !_FS_OK || stopGuestbook) return;
+  guestbookError = false;
+  stopGuestbook = _db.collection('discipleDocs').where('kind', '==', 'guestbook').onSnapshot(snapshot => {
+    guestbookEntries = snapshot.docs.map(doc => doc.data())
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    paintGuestbook();
+  }, () => {
+    stopGuestbook = null;
+    guestbookError = true;
+    paintGuestbook();
+  });
+}
+
+function paintGuestbook() {
+  const list = document.getElementById('guestbook-list');
+  if (!list) return;
+  const message = !_FS_OK || guestbookError ? '방명록에 연결하지 못했어요.'
+    : guestbookEntries === null ? '한마디를 불러오고 있어요.'
+    : '아직 남겨진 한마디가 없어요.';
+  list.innerHTML = guestbookEntries?.length ? guestbookEntries.map(entry => `
+    <article class="border-t pt-3">
+      <p class="text-sm font-semibold text-gray-600">${esc(entry.name || '제자반')}</p>
+      <p class="mt-1 whitespace-pre-wrap break-words">${esc(entry.text)}</p>
+    </article>`).join('') : `<p class="text-sm text-gray-500">${message}</p>`;
+}
+
+async function submitGuestbook(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = form.elements.message;
+  const button = form.querySelector('button');
+  const text = input.value.trim();
+  const user = findUser(currentUser);
+  if (!user || !text || text.length > 500 || button.disabled) return;
+  if (!_FS_OK) { toast('인터넷 연결을 확인해 주세요.'); return; }
+  button.disabled = true;
+  try {
+    await _db.collection('discipleDocs').add({
+      kind: 'guestbook', name: user.name, text, createdAt: new Date().toISOString()
+    });
+    if (input.value.trim() === text) input.value = '';
+    toast('한마디를 남겼어요!');
+  } catch (error) {
+    console.warn('방명록 저장 실패:', error);
+    toast('한마디를 저장하지 못했어요. 다시 시도해 주세요.');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function renderHome() {
-  document.getElementById('page-home').innerHTML = `
+  const home = document.getElementById('page-home');
+  if (!document.getElementById('guestbook-list')) home.innerHTML = `
     <section class="card text-center py-10">
       <h2 class="text-2xl font-bold">수고했습니다.</h2>
       <p class="mt-4 text-lg">당신은 그리스도의 제자입니다.</p>
       <p class="mt-2 text-lg">삶 속에서 예배를 드리며 삽시다.</p>
+    </section>
+    <section class="card">
+      <h2 class="text-xl font-bold">동역자에게 한마디</h2>
+      <p class="mt-2 text-gray-600">함께한 동역자들에게 감사와 응원을 남겨 주세요.</p>
+      <form class="mt-4 space-y-3" onsubmit="submitGuestbook(event)">
+        <label for="guestbook-message" class="sr-only">동역자에게 남길 글</label>
+        <textarea id="guestbook-message" name="message" rows="3" maxlength="500" required placeholder="함께해서 고마웠어!"></textarea>
+        <button type="submit" class="rounded-xl bg-gray-900 px-4 py-2 text-white disabled:opacity-50">한마디 남기기</button>
+      </form>
+      <div id="guestbook-list" class="mt-5 space-y-3" aria-live="polite"></div>
     </section>`;
+  paintGuestbook();
 }
 
 // ==========================================
@@ -3915,6 +3987,7 @@ try {
     currentUser = saved;
     document.getElementById('login-screen').style.display = 'none';
     renderAll();
+    watchGuestbook();
   }
 } catch (_) {}
 
