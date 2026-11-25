@@ -109,7 +109,6 @@
   <div class="flex items-center justify-between max-w-2xl mx-auto">
     <h1 class="text-lg font-bold cursor-pointer active:opacity-70" onclick="navigate('home')">확~마! 제자반</h1>
     <div class="flex items-center gap-2">
-      <div id="header-week" class="text-sm px-3 py-1 rounded-full" style="background:rgba(255,255,255,.12)"></div>
       <button onclick="openModal('modal-user-menu')" class="flex items-center gap-1 px-2.5 py-1 rounded-full text-sm" style="background:rgba(255,255,255,.12)">
         <span id="header-user-name" class="text-xs max-w-20 truncate"></span>
       </button>
@@ -138,25 +137,9 @@
       <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
       <span class="text-xs mt-0.5 font-medium text-gray-500">홈</span>
     </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('qt')" id="nav-qt">
-      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-      <span class="text-xs mt-0.5 font-medium text-gray-500">큐티</span>
-    </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('pray')" id="nav-pray">
-      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      <span class="text-xs mt-0.5 font-medium text-gray-500">기도</span>
-    </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('sermon')" id="nav-sermon">
-      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 18V6a2 2 0 0 1 2-2h6v16H5a2 2 0 0 1-2-2z"/><path d="M21 18V6a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 0 2-2z"/></svg>
-      <span class="text-xs mt-0.5 font-medium text-gray-500">설교노트</span>
-    </button>
     <button class="nav-btn flex flex-col items-center py-1 px-2" onclick="navigate('gallery')" id="nav-gallery">
       <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 5l1-2h6l1 2"/></svg>
       <span class="text-xs mt-0.5 font-medium text-gray-500">갤러리</span>
-    </button>
-    <button class="nav-btn flex flex-col items-center py-1 px-2 hidden" onclick="navigate('check')" id="nav-check">
-      <svg class="w-6 h-6 stroke-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      <span class="text-xs mt-0.5 font-medium text-gray-500">체크표</span>
     </button>
   </div>
 </nav>
@@ -339,7 +322,7 @@
 // 기본 정보
 // ==========================================
 // sw.js의 APP_BUILD와 반드시 같은 값이어야 한다. 배포할 때 둘 다 올린다.
-const APP_BUILD = '2026-11-13.2';
+const APP_BUILD = '2026-11-25.1';
 const CLASS_NAME = '확~마! 제자반';
 // 2026-11-02 목사님 지시 — 큐티를 11월 말까지 열어 둔다.
 // 기간(WEEKS)만 늘리고 수료 판정 기준(JUDGE_WEEKS)은 9주로 묶는다. 둘을 같이 늘리면
@@ -776,7 +759,7 @@ function isMonitor() { const u = findUser(currentUser); return !!(u && u.role ==
 function canSeeCheck() { return isLeader() || isMonitor(); }
 // 출석·제출 체크는 반장도 함께 한다. 다만 아이들이 쓴 글과 댓글, 기도일지 속내용은
 // 목사님만 본다 — 반장의 몫은 '누가 냈나 안 냈나'를 보고 챙기는 데까지다.
-function canEditCheck() { return isLeader() || isMonitor(); }
+function canEditCheck() { return false; }
 
 function fillLoginSelect() {
   const sel = document.getElementById('login-name-select');
@@ -803,7 +786,6 @@ function doLogin() {
   document.getElementById('login-screen').style.display = 'none';
   resetDates();
   renderAll();
-  watchNotes();
 }
 function doLogout() {
   _newNotes = [];
@@ -960,27 +942,9 @@ function markCheck(kind, id, date, on) {
 }
 
 function saveDoc(kind, id, date, data, okMsg) {
-  const k = dkey(kind, id, date);
-  const doc = Object.assign({ kind, studentId: id, date, updatedAt: new Date().toISOString() }, data);
-  _docs[k] = doc;
-  // 보관함에 먼저 적고, 적힌 것을 확인한 뒤에만 초안을 지운다.
-  const queued = obQueue(k, doc);
-  if (queued) {
-    const draftPrefix = `${id}|${kind}|${date}|`;
-    Object.keys(_draft).forEach(dk => { if (dk.startsWith(draftPrefix)) delete _draft[dk]; });
-    saveDrafts();
-  }
-  markCheck(kind, id, date, hasContent(kind, doc));
-  renderAll();
-  if (!_FS_OK) { toast('적어 뒀어요 — 연결되면 자동으로 올라가요'); return; }
-  _db.collection('discipleDocs').doc(k).set(doc)
-    .then(() => { obDone(k); toast(okMsg || '올렸어요!'); renderAll(); })
-    .catch(e => {
-      console.warn('저장 실패 — 보관함에 두고 다시 시도합니다:', e);
-      if (queued) { toast('적어 뒀어요 — 연결되면 자동으로 올라가요'); scheduleObFlush(); }
-      else toast('저장이 안 됐어요. 잠시 뒤 다시 눌러주세요');
-    });
+  toast('제자반 기록 제출이 종료되었습니다.');
 }
+
 
 // 인도자 전용 — 규칙상 문서 삭제가 막혀 있어 내용을 비운다.
 function armDelete(kind, id) { if (!canManage()) return; _delArm = kind + '_' + id; _editingDoc = null; renderAll(); }
@@ -2021,8 +1985,7 @@ function toggleDot(field, id, n, i) {
 // 렌더링
 // ==========================================
 function navigate(page) {
-  if (page === 'dqt') { page = 'qt'; qtSection = 'dqt'; }
-  else if (page === 'qt') qtSection = 'daily';
+  if (page !== 'gallery') page = 'home';
   currentPage = page;
   _editingDoc = null; _delArm = null; _pendingImg = null;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -2040,16 +2003,8 @@ function renderAll() {
   document.getElementById('header-user-name').textContent = u ? u.name : '';
   document.getElementById('user-menu-name').textContent = u ? u.name : '';
   document.getElementById('user-menu-role').textContent = isLeader() ? (u ? u.title : '인도자') : (u && u.role ? u.role : '제자반');
-  document.getElementById('btn-settings').classList.toggle('hidden', !isLeader());
-  document.getElementById('nav-check').classList.toggle('hidden', !canSeeCheck());
-  document.getElementById('header-week').textContent = weekStarted(0) ? `${currentWeek()+1}주차` : '시작 전';
-  paintNoteDots();
-  paintPushBtn();
-  const _typing = /TEXTAREA|INPUT/.test((document.activeElement||{}).tagName || '');
-  if (_entryOpen && !_typing) paintEntry();
-  if (_personOpen && !_typing) paintPerson();
-  ({ home: renderHome, qt: renderQT, dqt: renderDQT, pray: renderPray,
-     sermon: renderSermon, gallery: renderGallery, bday: renderBday, check: renderCheck }[currentPage] || renderHome)();
+  if (currentPage === 'gallery') renderGallery();
+  else renderHome();
 }
 
 // 안 읽은 댓글이 있는 메뉴에 빨간 점을 찍는다.
@@ -2233,162 +2188,12 @@ function noticeCard() {
 }
 
 function renderHome() {
-  const el = document.getElementById('page-home');
-  const t = iso(today0());
-  const s = slotOf(t);
-  const cw = currentWeek(), wi = weekInfo(cw);
-  const started = weekStarted(0);
-  const me = currentUser;
-  const inRange = !!s;
-  const n = s ? s.n : cw, i = s ? s.i : 0;
-
-  const myDqt  = inRange ? dqtDone(me,n)   : false;
-  const myQtCount = inRange ? cntOf('qt',me,n) : 0;
-  const myPrayCount = inRange ? cntOf('pray',me,n) : 0;
-  const myFriSermon = sermonOf(me, n, 'fri') === 'O';
-  const mySunSermon = sermonOf(me, n, 'sun') === 'O';
-  const homePhotos = homePool();
-  _homeGalleryIndex = homePhotos.length ? _homeGalleryIndex % homePhotos.length : 0;
-  if (_homeGalleryIndex >= homePhotos.length) _homeGalleryIndex = 0;
-  const homeGallery = homePhotos.length ? `
-    <button onclick="navigate('gallery')" class="relative block w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm" style="min-height:unset">
-      <img id="home-gallery-img" src="${galleryThumbOf(homePhotos[_homeGalleryIndex])}" alt="${esc(homePhotos[_homeGalleryIndex].caption || '제자반 갤러리 사진')}"
-        class="w-full aspect-[16/9] object-cover">
-      <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-10 text-left text-sm font-bold text-white">확~마! 갤러리</span>
-      <span class="absolute bottom-3 right-3 flex gap-1">${homePhotos.map((_,i)=>`<i data-gallery-dot class="h-1.5 w-1.5 rounded-full ${i===_homeGalleryIndex?'bg-white':'bg-white/40'}"></i>`).join('')}</span>
-    </button>` : '';
-
-  const todo = `
-    <div class="card">
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="font-bold text-gray-800 text-sm">이번 주 할 일</h3>
-        <span class="text-[11px] text-gray-400">${n+1}주차</span>
-      </div>
-      ${!inRange ? `<p class="text-sm text-gray-500 py-4 text-center">제자반 기간이 아니에요</p>` : `
-      <div class="grid grid-cols-5 gap-1.5">
-        <button onclick="navigate('qt')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myQtCount>=4?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
-          <span class="text-[11px] leading-tight font-bold text-gray-800">큐티</span>
-          <span class="text-[10px] mt-1 font-semibold ${myQtCount>=4?'text-green-700':'text-gray-400'}">${myQtCount}/4</span>
-        </button>
-        <button onclick="navigate('dqt')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myDqt?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
-          <span class="text-[11px] leading-tight font-bold text-gray-800">D형<br>큐티</span>
-          <span class="text-[10px] mt-1 font-semibold ${myDqt?'text-green-700':'text-gray-400'}">${myDqt?'완료':'미완료'}</span>
-        </button>
-        <button onclick="navigate('pray')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myPrayCount>=4?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
-          <span class="text-[11px] leading-tight font-bold text-gray-800">기도<br>영적일지</span>
-          <span class="text-[10px] mt-1 font-semibold ${myPrayCount>=4?'text-green-700':'text-gray-400'}">${myPrayCount}/4</span>
-        </button>
-        <button onclick="navigate('sermon');setSermonType('fri')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${myFriSermon?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
-          <span class="text-[11px] leading-tight font-bold text-gray-800">금철<br>노트</span>
-          <span class="text-[10px] mt-1 font-semibold ${myFriSermon?'text-green-700':'text-gray-400'}">${myFriSermon?'완료':'미완료'}</span>
-        </button>
-        <button onclick="navigate('sermon');setSermonType('sun')" class="aspect-square rounded-2xl border px-1 py-2 flex flex-col items-center justify-center ${mySunSermon?'bg-green-50 border-green-200':'bg-gray-50 border-gray-100'}">
-          <span class="text-[11px] leading-tight font-bold text-gray-800">주일<br>설교노트</span>
-          <span class="text-[10px] mt-1 font-semibold ${mySunSermon?'text-green-700':'text-gray-400'}">${mySunSermon?'완료':'미완료'}</span>
-        </button>
-      </div>`}
-    </div>`;
-
-  const mine = !isLeader() ? `
-    <div>
-      <div class="flex items-center justify-between mb-2 px-1">
-        <h3 class="font-bold text-gray-800 text-sm">이번 주 내 체크표</h3>
-        <span class="text-[11px] text-gray-400">${n+1}주차</span>
-      </div>
-      ${checkCard(findUser(me), n, true)}
-      <p class="text-[11px] text-gray-400 mt-2 px-1">제출하면 해당 칸이 자동으로 채워집니다.</p>
-    </div>` : '';
-
-  const leaderBoard = isLeader() && inRange ? `
-    <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-2">오늘 제출 현황</h3>
-      <div class="grid grid-cols-3 gap-2 text-center mb-3">
-        ${[['큐티','qt','text-blue-600'],['D형(주1)','dqt','text-purple-600'],['기도일지','pray','text-green-600']].map(([lab,f,c]) => {
-          const cnt = f === 'dqt' ? state.students.filter(x => dqtDone(x.id, n)).length
-                                  : state.students.filter(x => arrOf(f, x.id, n)[i]).length;
-          return `<div class="rounded-xl bg-gray-50 py-2">
-            <p class="text-[11px] text-gray-500">${lab}</p>
-            <p class="text-lg font-bold ${c} mt-0.5">${cnt}<span class="text-gray-400 text-sm">/${state.students.length}</span></p>
-          </div>`;
-        }).join('')}
-      </div>
-      <div class="flex flex-wrap gap-1">
-        ${state.students.map(x => {
-          const c = (qtOf(x.id,n)[i]?1:0) + (dqtDone(x.id,n)?1:0) + (prayOf(x.id,n)[i]?1:0);
-          const cls = c === 3 ? 'bg-green-100 text-green-700' : c > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-400';
-          return `<span class="text-[11px] px-2 py-1 rounded-full font-semibold ${cls}">${x.name} ${c}/3</span>`;
-        }).join('')}
-      </div>
-    </div>` : '';
-
-  const bdToday = todaysBirthdays();
-  const bdSoon = upcomingBirthdays().filter(x => x.days > 0)[0];
-  const bdayHome = bdToday.length ? `
-    <div class="card bg-gray-900">
-      <p class="text-white font-bold text-center mt-1">오늘은 ${bdToday.map(x=>x.name).join(' · ')} 생일!</p>
-      <p class="text-white/60 text-xs text-center mt-1">함께 축하해 주세요.</p>
-    </div>`
-    : (bdSoon ? `
-    <div class="card w-full flex items-center justify-between">
-      <span class="flex items-center gap-2 text-sm text-gray-700">다음 생일 <b class="text-gray-900">${bdSoon.name}</b><span class="text-xs text-gray-400">${birthLabel(bdSoon.id)}</span></span>
-      <span class="text-xs font-bold text-gray-400">D-${bdSoon.days}</span>
-    </div>` : '');
-
-  const emergencyHome = `
-    <div class="card">
-      <h3 class="font-bold text-gray-800 text-sm mb-2">비상연락망</h3>
-      <div class="grid grid-cols-2 gap-1.5">
-        ${state.students.concat(LEADERS).map(s => `<details class="phone-detail rounded-xl bg-gray-50">
-          <summary class="flex items-center justify-between px-3 py-2 cursor-pointer select-none">
-            <span class="text-sm font-semibold text-gray-800">${s.name}${s.role ? ` <span class="text-[10px] text-gray-400">${s.role}</span>` : ''}</span>
-            <span class="flex items-center gap-2">
-              <span class="text-[11px] font-semibold text-gray-500">${profileOf(s.id).birthday || (birthOf(s.id) ? birthLabel(s.id) : '생일 미등록')}</span>
-              <span class="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-lg shadow-sm" aria-label="${s.name} 전화번호 보기">📞</span>
-            </span>
-          </summary>
-          <div class="flex items-center justify-between border-t border-white px-3 py-2">
-            ${phoneOf(s.id) ? `<span class="text-sm font-semibold tracking-wide text-gray-700">${esc(phoneOf(s.id))}</span>
-              <a href="tel:${phoneOf(s.id).replace(/-/g,'')}" class="rounded-full bg-green-600 px-4 py-2 text-xs font-bold text-white">전화 걸기</a>`
-              : `<span class="text-xs text-gray-400">등록된 번호가 없습니다</span>`}
-          </div>
-        </details>`).join('')}
-      </div>
-      <p class="text-[11px] text-gray-400 mt-2">전화 버튼을 누르면 번호가 열립니다.</p>
-    </div>`;
-
-  el.innerHTML = `
-    ${todoCard()}
-    ${bdayHome}
-    ${homeGallery}
-    ${noticeCard()}
-    <div class="card">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-xs text-gray-500 font-semibold">${CLASS_NAME}</p>
-          <p class="text-lg font-bold text-gray-800 mt-0.5">${started ? (inCourse(cw) ? `${cw+1}주차 진행 중` : '큐티 연장 기간') : '시작 전'}</p>
-          <p class="text-xs text-gray-500 mt-1">${fmt(wi.sun)}(일) ~ ${fmt(wi.sat)}(토)</p>
-          <p class="text-xs text-gray-400 mt-1">오늘 본문 · ${esc(todayRef() || '본문이 없는 날')}</p>
-        </div>
-        <div class="text-right">
-          ${inCourse(cw)
-            ? `<p class="text-3xl font-bold text-gray-700">${cw+1}<span class="text-base text-gray-400">/${JUDGE_WEEKS}</span></p>`
-            : `<p class="text-xl font-bold text-gray-700">🎓</p><p class="text-[11px] text-gray-400 mt-0.5">9주 수료</p>`}
-        </div>
-      </div>
-    </div>
-    ${todo}
-    ${mine}
-    ${leaderBoard}
-    ${emergencyHome}
-    <div class="card bg-gray-50 border border-gray-200">
-      <p class="text-xs text-gray-700 leading-relaxed">
-        한 주는 <b>주일</b>에 엽니다. 주일 설교를 노트로 남기고(<b>설교 노트</b>),
-        매일 말씀을 읽고(<b>큐티</b>), 하루 10~15분 하나님 앞에 앉아 오늘 내 삶을 그 말씀으로 읽습니다(<b>기도 영적일지</b>).
-        한 주에 한 번은 관찰·해석·느낀점·적용 넷으로 깊이 파고듭니다(<b>D형 큐티</b>).
-        그리고 토요일에 모입니다.
-      </p>
-    </div>`;
-  startHomeGallery();
+  document.getElementById('page-home').innerHTML = `
+    <section class="card text-center py-10">
+      <h2 class="text-2xl font-bold">수고했습니다.</h2>
+      <p class="mt-4 text-lg">당신은 그리스도의 제자입니다.</p>
+      <p class="mt-2 text-lg">삶 속에서 예배를 드리며 삽시다.</p>
+    </section>`;
 }
 
 // ==========================================
@@ -4110,16 +3915,11 @@ try {
     currentUser = saved;
     document.getElementById('login-screen').style.display = 'none';
     renderAll();
-    watchNotes();
   }
 } catch (_) {}
 
 initFirestore();
 initGallery();
-flushOutbox();   // 지난번에 못 올린 글이 있으면 지금 올린다
-// 앱으로 돌아왔을 때·인터넷이 붙었을 때도 한 번 더 — 할당량이 풀리면 그때 올라간다.
-document.addEventListener('visibilitychange', () => { if (!document.hidden) flushOutbox(); });
-window.addEventListener('online', flushOutbox);
 
 // ==========================================
 // 앱 자동 업데이트 (새로고침 루프 차단 포함)
